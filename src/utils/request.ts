@@ -94,7 +94,30 @@ server.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+// 在 service.interceptors.request.use 中添加
+config.interceptors.request.use((config) => {
+  // 1. 自动映射所有 v1 接口
+  const v1Endpoints = ['/song/url', '/search', '/playlist/detail', '/album', '/artist/songs'];
+  
+  if (v1Endpoints.some(endpoint => config.url.startsWith(endpoint))) {
+    // 如果还没加 v1，就给它加上
+    if (!config.url.includes('/v1')) {
+      config.url = config.url.replace(/(\/song\/url|\/search|\/playlist\/detail)/, '$1/v1');
+    }
+  }
 
+  // 2. 音质参数强制转换
+  if (config.url.includes('/song/url/v1')) {
+    config.params = {
+      ...config.params,
+      level: 'jymaster', // 强制开启最高音质
+      unblock: true      // 开启增强版灵魂：解灰
+    };
+    delete config.params.br; // 删除旧版参数
+  }
+
+  return config;
+});
 // 请求
 const request = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
   // 返回请求数据
