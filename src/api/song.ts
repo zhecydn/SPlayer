@@ -7,7 +7,7 @@ import request from "@/utils/request";
 // 获取歌曲详情
 export const songDetail = (ids: number | number[]) => {
   return request({
-    url: "/song/url/v1",
+    url: "/song/detail",
     method: "post",
     params: { timestamp: Date.now() },
     data: { ids: Array.isArray(ids) ? ids.join(",") : ids.toString() },
