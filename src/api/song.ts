@@ -42,25 +42,43 @@ export const songUrl = (
     params: {
       id,
       level,
-      unblock: true, // 仅在此处添加你的 API 解锁参数
+      unblock: true, 
       timestamp: Date.now(),
     },
   }).then((res: any) => {
-    // --- 结构保底补丁 (这是为了解决你看到的 AUDIO_SOURCE_EMPTY) ---
-    // 如果 request.ts 拦截器剥离了 data，我们在这里把它手动补回来，
-    // 确保交给 Store 的数据永远包含 .data 属性。
-    if (res && !res.data) {
-      return { data: res };
+    // 调试：请在部署后观察控制台，这行能告诉你真相
+    console.log("SongURL Response:", res);
+
+    // --- 终极结构补全逻辑 ---
+    // 如果返回的 res 已经是那个包含 url 的对象（比如 data[0]）
+    // 或者 res 是数组，我们就把它包进一个 .data 属性里返还给 Store
+    
+    let finalRes = res;
+
+    // 情况 1: res 已经是数组了 [ {url:...} ]
+    if (Array.isArray(res)) {
+      finalRes = { data: res };
+    } 
+    // 情况 2: res 已经是带 data 的对象了 { data: [...] } -> 保持不变
+    else if (res && res.data) {
+      finalRes = res;
+    } 
+    // 情况 3: res 是剥离后的单体对象 { url: ... }
+    else if (res && res.url) {
+      finalRes = { data: [res] };
     }
-    return res;
+    // 情况 4: 其他异常 -> 包一层壳防止 Store 崩溃
+    else {
+      finalRes = res?.data ? res : { data: res };
+    }
+
+    return finalRes;
   });
 };
 
-// 保持原版一致
 export const unlockSongUrl = (id: number, keyword: string, server: any) => {
   return songUrl(id);
 };
-
 // 获取歌曲歌词
 export const songLyric = (id: number) => {
   return request({
