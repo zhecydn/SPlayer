@@ -50,13 +50,11 @@ export const songUrl = (
 };
 
 // 获取解锁歌曲 URL
+// 修改后的解锁函数：直接调用你的 songUrl，不再走原版的第三方解锁逻辑
 export const unlockSongUrl = (id: number, keyword: string, server: SongUnlockServer) => {
-  const params = server === SongUnlockServer.NETEASE ? { id } : { keyword };
-  return request({
-    baseURL: "/api/unblock",
-    url: `/${server}`,
-    params: { ...params, noCookie: true },
-  });
+  // 这里直接返回 songUrl 的执行结果
+  // 这样无论 SPlayer 认为这首歌是否需要解锁，最终都会走你自己的 API
+  return songUrl(id); 
 };
 
 // 获取歌曲歌词
