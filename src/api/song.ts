@@ -25,8 +25,7 @@ export const songQuality = (id: number) => {
   });
 };
 
-// 获取歌曲 URL
-export const songUrl = async (
+export const songUrl = (
   id: number,
   level:
     | "standard"
@@ -38,58 +37,28 @@ export const songUrl = async (
     | "sky"
     | "jymaster" = "exhigh",
 ) => {
-  try {
-    const response: any = await request({
-      url: "/song/url/v1",
-      params: {
-        id,
-        level,
-        unblock: true, 
-        timestamp: Date.now(),
-      },
-    });
-// --- ⬇️ 关键调试日志 ⬇️ ---
-    console.log("=== SPlayer 接口数据追踪 ===");
-    console.log("1. Request 直接返回的对象:", res);
-    console.log("2. res 里面有没有 data 属性?", res?.data ? "有" : "没有");
-    
-    // 自动适配层级
-    let realDataArray = null;
-    if (res?.data && Array.isArray(res.data)) {
-        realDataArray = res.data;
-    } else if (Array.isArray(res)) {
-        realDataArray = res;
+  return request({
+    url: "/song/url/v1",
+    params: {
+      id,
+      level,
+      unblock: true, // 仅在此处添加你的 API 解锁参数
+      timestamp: Date.now(),
+    },
+  }).then((res: any) => {
+    // --- 结构保底补丁 (这是为了解决你看到的 AUDIO_SOURCE_EMPTY) ---
+    // 如果 request.ts 拦截器剥离了 data，我们在这里把它手动补回来，
+    // 确保交给 Store 的数据永远包含 .data 属性。
+    if (res && !res.data) {
+      return { data: res };
     }
-
-    if (realDataArray && realDataArray[0]) {
-        console.log("3. 成功定位到 URL:", realDataArray[0].url);
-        // 数据洗白
-        realDataArray[0].fee = 0;
-        realDataArray[0].payed = 1;
-        realDataArray[0].code = 200;
-        if (realDataArray[0].url) {
-            realDataArray[0].url = realDataArray[0].url.replace(/^http:/, "https:");
-        }
-    } else {
-        console.warn("3. ❌ 无法在响应中定位到 data[0]");
-    }
-
-    // --- 核心修复：无论如何，包成 Store 认识的形状 ---
-    // Store 预期的是结果 .data[0].url
-    const finalWrapper = res?.data ? res : { data: res };
-    console.log("4. 最终交给 Store 的包装对象:", finalWrapper);
-    
-    return finalWrapper;
-
-  } catch (error) {
-    console.error("songUrl 崩溃:", error);
-    return { data: [{ id, url: null }] };
-  }
+    return res;
+  });
 };
 
-// 获取解锁歌曲 URL
-export const unlockSongUrl = async (id: number, keyword: string, server: SongUnlockServer) => {
-  return await songUrl(id);
+// 保持原版一致
+export const unlockSongUrl = (id: number, keyword: string, server: any) => {
+  return songUrl(id);
 };
 
 // 获取歌曲歌词
