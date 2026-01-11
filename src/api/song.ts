@@ -46,39 +46,36 @@ export const songUrl = (
       timestamp: Date.now(),
     },
   }).then((res: any) => {
-    // 调试：请在部署后观察控制台，这行能告诉你真相
-    console.log("SongURL Response:", res);
-
-    // --- 终极结构补全逻辑 ---
-    // 如果返回的 res 已经是那个包含 url 的对象（比如 data[0]）
-    // 或者 res 是数组，我们就把它包进一个 .data 属性里返还给 Store
+    // 1. 结构兼容：确保 res.data[0] 存在
+    let data = res?.data || (Array.isArray(res) ? res : null);
     
-    let finalRes = res;
+    if (data && data[0]) {
+      const song = data[0];
+      
+      // --- 关键：对抗 SPlayer 内部清空逻辑 ---
+      song.st = 0;       // 强制状态正常（0 表示有版权）
+      song.fee = 0;      // 强制免费（0 表示普通歌曲）
+      song.pl = 128000;  // 强制一个假播放量
+      song.dl = 0;       // 强制下载权限开启
+      song.cp = 1;       // 强制有版权标记
+      
+      // 保持请求音质的一致性，防止它因为 level 不对而二次请求
+      if (!song.level) song.level = level;
 
-    // 情况 1: res 已经是数组了 [ {url:...} ]
-    if (Array.isArray(res)) {
-      finalRes = { data: res };
-    } 
-    // 情况 2: res 已经是带 data 的对象了 { data: [...] } -> 保持不变
-    else if (res && res.data) {
-      finalRes = res;
-    } 
-    // 情况 3: res 是剥离后的单体对象 { url: ... }
-    else if (res && res.url) {
-      finalRes = { data: [res] };
-    }
-    // 情况 4: 其他异常 -> 包一层壳防止 Store 崩溃
-    else {
-      finalRes = res?.data ? res : { data: res };
+      // 确保 https
+      if (song.url) song.url = song.url.replace(/^http:/, "https:");
     }
 
-    return finalRes;
+    // 2. 补全外壳返回
+    // 必须返回 { data: [ { url: '...', st: 0, ... } ] }
+    return res?.data ? res : { data: data };
   });
 };
 
 export const unlockSongUrl = (id: number, keyword: string, server: any) => {
   return songUrl(id);
 };
+
 // 获取歌曲歌词
 export const songLyric = (id: number) => {
   return request({
