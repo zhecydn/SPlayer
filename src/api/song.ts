@@ -39,47 +39,60 @@ export const songUrl = async (
     | "jymaster" = "exhigh",
 ) => {
   try {
-    const res: any = await request({
+    const response: any = await request({
       url: "/song/url/v1",
       params: {
         id,
         level,
-        unblock: true, // 开启解锁
+        unblock: true, 
         timestamp: Date.now(),
       },
     });
 
-    // --- 核心修复：确保返回结构严格符合 SPlayer 预期 ---
-    // SPlayer 预期结构必须是 { data: [ { url: '...', ... } ] }
-    if (res && res.data && Array.isArray(res.data) && res.data[0]) {
-      // 强制清洗数据，绕过付费/试听逻辑
-      res.data[0].fee = 0;
-      res.data[0].payed = 1;
-      res.data[0].code = 200;
-      if (res.data[0].freeTrialInfo) delete res.data[0].freeTrialInfo;
-      
-      // 确保 URL 存在且为 HTTPS
-      if (res.data[0].url) {
-        res.data[0].url = res.data[0].url.replace(/^http:/, "https:");
-      } else {
-        console.error("API 返回的 data[0] 中没有 url 字段");
-      }
-    } else {
-      console.error("API 返回结构异常，未找到 data[0]", res);
+    // --- 结构自适应修正 ---
+    // 情况 A: request.ts 没剥离数据，response 还是 { data: [...] }
+    // 情况 B: request.ts 剥离了数据，response 直接就是 { code: 200, data: [...] } 或直接就是 [...]
+    
+    let finalData = response?.data || (Array.isArray(response) ? response : null);
+    
+    // 如果 response 直接包含 data 数组 (标准的网易云接口结构)
+    if (response && Array.isArray(response.data)) {
+        finalData = response.data;
     }
 
-    // 必须确保返回的是整个 res 对象，而不是 res.data
-    return res;
+    if (finalData && finalData[0]) {
+      // 强制清洗第一首歌曲的数据
+      const song = finalData[0];
+      song.fee = 0;
+      song.payed = 1;
+      song.code = 200;
+      if (song.freeTrialInfo) delete song.freeTrialInfo;
+      
+      if (song.url) {
+        song.url = song.url.replace(/^http:/, "https:");
+      } else {
+        console.error("❌ 严重：API 返回的对象里没有 url 字段", song);
+      }
+    } else {
+      console.error("❌ 严重：API 返回结构不包含有效的 data 数组", response);
+    }
+
+    // --- 重点：包装成 Store 预期的原始 Axios 结构 ---
+    // SPlayer 的 Store 逻辑通常会执行类似 (await songUrl(id)).data[0].url
+    // 如果我们的 request.ts 已经把 data 剥离了，我们这里必须把它包回去！
+    const finalResult = response?.data ? response : { data: response };
+
+    console.log("✅ 发送给播放器的数据结构:", finalResult);
+    return finalResult;
+
   } catch (error) {
     console.error("songUrl 内部执行出错:", error);
-    // 即使出错也返回一个空结构，防止 stores 崩溃
     return { data: [{ id, url: null, code: 404 }] };
   }
 };
 
 // 获取解锁歌曲 URL
 export const unlockSongUrl = async (id: number, keyword: string, server: SongUnlockServer) => {
-  // 必须加 await，确保返回的是 Promise 结果
   return await songUrl(id);
 };
 
