@@ -25,7 +25,8 @@ export const songQuality = (id: number) => {
   });
 };
 
-export const songUrl = async (
+// 获取歌曲 URL
+export const songUrl = (
   id: number,
   level:
     | "standard"
@@ -37,53 +38,25 @@ export const songUrl = async (
     | "sky"
     | "jymaster" = "exhigh",
 ) => {
-  console.log("🛠️ 开始请求歌曲 URL, ID:", id);
-
-  try {
-    // 强制把这个请求包在 try-catch 里
-    const res: any = await request({
-      url: "/song/url/v1",
-      params: { id, level, unblock: true, timestamp: Date.now() },
-    }).catch(err => {
-      console.error("🔥 Request.ts 内部抛出了错误:", err);
-      // 如果这里报错，说明是 baseURL 或 Axios 拦截器直接拦截了
-      throw err; 
-    });
-
-    console.log("📥 Request 原始响应内容:", res);
-
-    // 结构归一化
-    let list = [];
-    if (res?.data && Array.isArray(res.data)) list = res.data;
-    else if (Array.isArray(res)) list = res;
-    else if (res?.url) list = [res];
-
-    if (list.length > 0) {
-      const s = list[0];
-      s.fee = 0;
-      s.st = 0;
-      s.payed = 1;
-      if (s.url) s.url = s.url.replace(/^http:/, "https:");
-      delete s.freeTrialInfo;
-      console.log("✅ 成功洗白数据, 准备返回...");
-    } else {
-      console.warn("⚠️ API 返回了空列表，这会导致 EMPTY 报错");
-    }
-
-    const final = { data: list, code: 200 };
-    console.log("🚀 终极封装数据:", final);
-    return final;
-
-  } catch (error: any) {
-    console.error("❌ songUrl 函数彻底崩溃:", error);
-    // 这里非常关键：即便报错，我们也返回一个格式正确的空数据，
-    // 看看 SPlayer 会报什么，而不是任由它抛出堆栈错误
-    return { data: [{ id, url: null }], code: 404 };
-  }
+  return request({
+    url: "/song/url/v1",
+    params: {
+      id,
+      level,
+      unblock: true, // 仅仅添加这一个参数
+      timestamp: Date.now(),
+    },
+  }).then(res => {
+    // 补丁：因为 request.ts 剥离了 data 壳，我们在这里给它包回去
+    // 这样 SPlayer 的 Store 访问 res.data[0] 时才不会报错
+    return res?.data ? res : { data: res };
+  });
 };
 
-export const unlockSongUrl = async (id: number) => {
-  return await songUrl(id);
+// 获取解锁歌曲 URL
+export const unlockSongUrl = (id: number, keyword: string, server: any) => {
+  // 这里直接复用 songUrl，让它走你的 unblock:true 逻辑
+  return songUrl(id);
 };
 
 // 获取歌曲歌词
