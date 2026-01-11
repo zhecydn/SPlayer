@@ -49,6 +49,16 @@ export const songUrl = (
   });
 };
 
+// 获取解锁歌曲 URL
+export const unlockSongUrl = (id: number, keyword: string, server: SongUnlockServer) => {
+  const params = server === SongUnlockServer.NETEASE ? { id } : { keyword };
+  return request({
+    baseURL: "/api/unblock",
+    url: `/${server}`,
+    params: { ...params, noCookie: true },
+  });
+};
+
 // 获取歌曲歌词
 export const songLyric = (id: number) => {
   return request({
