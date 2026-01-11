@@ -27,7 +27,7 @@ export const songQuality = (id: number) => {
 
 // 获取歌曲 URL
 export const songUrl = (
-  id: number,
+  id: number, // 扩展类型以支持你提到的多 ID 字符串调用
   level:
     | "standard"
     | "higher"
@@ -43,6 +43,7 @@ export const songUrl = (
     params: {
       id,
       level,
+      unblock: true, // 强制开启歌曲解锁
       timestamp: Date.now(),
     },
   });
