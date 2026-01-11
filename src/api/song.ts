@@ -48,46 +48,42 @@ export const songUrl = async (
         timestamp: Date.now(),
       },
     });
-
-    // --- 结构自适应修正 ---
-    // 情况 A: request.ts 没剥离数据，response 还是 { data: [...] }
-    // 情况 B: request.ts 剥离了数据，response 直接就是 { code: 200, data: [...] } 或直接就是 [...]
+// --- ⬇️ 关键调试日志 ⬇️ ---
+    console.log("=== SPlayer 接口数据追踪 ===");
+    console.log("1. Request 直接返回的对象:", res);
+    console.log("2. res 里面有没有 data 属性?", res?.data ? "有" : "没有");
     
-    let finalData = response?.data || (Array.isArray(response) ? response : null);
-    
-    // 如果 response 直接包含 data 数组 (标准的网易云接口结构)
-    if (response && Array.isArray(response.data)) {
-        finalData = response.data;
+    // 自动适配层级
+    let realDataArray = null;
+    if (res?.data && Array.isArray(res.data)) {
+        realDataArray = res.data;
+    } else if (Array.isArray(res)) {
+        realDataArray = res;
     }
 
-    if (finalData && finalData[0]) {
-      // 强制清洗第一首歌曲的数据
-      const song = finalData[0];
-      song.fee = 0;
-      song.payed = 1;
-      song.code = 200;
-      if (song.freeTrialInfo) delete song.freeTrialInfo;
-      
-      if (song.url) {
-        song.url = song.url.replace(/^http:/, "https:");
-      } else {
-        console.error("❌ 严重：API 返回的对象里没有 url 字段", song);
-      }
+    if (realDataArray && realDataArray[0]) {
+        console.log("3. 成功定位到 URL:", realDataArray[0].url);
+        // 数据洗白
+        realDataArray[0].fee = 0;
+        realDataArray[0].payed = 1;
+        realDataArray[0].code = 200;
+        if (realDataArray[0].url) {
+            realDataArray[0].url = realDataArray[0].url.replace(/^http:/, "https:");
+        }
     } else {
-      console.error("❌ 严重：API 返回结构不包含有效的 data 数组", response);
+        console.warn("3. ❌ 无法在响应中定位到 data[0]");
     }
 
-    // --- 重点：包装成 Store 预期的原始 Axios 结构 ---
-    // SPlayer 的 Store 逻辑通常会执行类似 (await songUrl(id)).data[0].url
-    // 如果我们的 request.ts 已经把 data 剥离了，我们这里必须把它包回去！
-    const finalResult = response?.data ? response : { data: response };
-
-    console.log("✅ 发送给播放器的数据结构:", finalResult);
-    return finalResult;
+    // --- 核心修复：无论如何，包成 Store 认识的形状 ---
+    // Store 预期的是结果 .data[0].url
+    const finalWrapper = res?.data ? res : { data: res };
+    console.log("4. 最终交给 Store 的包装对象:", finalWrapper);
+    
+    return finalWrapper;
 
   } catch (error) {
-    console.error("songUrl 内部执行出错:", error);
-    return { data: [{ id, url: null, code: 404 }] };
+    console.error("songUrl 崩溃:", error);
+    return { data: [{ id, url: null }] };
   }
 };
 
