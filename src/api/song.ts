@@ -37,41 +37,50 @@ export const songUrl = async (
     | "sky"
     | "jymaster" = "exhigh",
 ) => {
-  // 注意：这里的 res 已经是 request.ts 剥离出的业务对象了 { code: 200, data: [...] }
+  // 调用你那个会“剥皮”的 request
   const res: any = await request({
     url: "/song/url/v1",
     params: {
       id,
       level,
-      unblock: true, 
+      unblock: true,
       timestamp: Date.now(),
     },
   });
 
-  console.log("DEBUG: request.ts 返回给 songUrl 的原始数据:", res);
-
-  // 1. 获取歌曲数组 (考虑到多种 API 返回可能)
-  const songs = res?.data || (Array.isArray(res) ? res : []);
+  // --- 这里的逻辑是关键 ---
+  // 因为 request.ts 返回的是 data，所以这里的 res 可能是 { data: [...], code: 200 }
+  // 也可能直接就是那个数组（取决于你的后端实现）
   
-  if (songs.length > 0) {
-    const s = songs[0];
-    // 强制洗白所有导致 SPlayer 报 EMPTY 的属性
-    s.url = s.url ? s.url.replace(/^http:/, "https:") : null;
+  let songList = [];
+  if (res && Array.isArray(res.data)) {
+    songList = res.data;
+  } else if (Array.isArray(res)) {
+    songList = res;
+  } else if (res && res.url) {
+    songList = [res];
+  }
+
+  // 洗白数据，确保 SPlayer 的“洁癖”检查能通过
+  if (songList.length > 0) {
+    const s = songList[0];
     s.fee = 0;
     s.payed = 1;
     s.st = 0;
-    s.cp = 1;
-    if (s.freeTrialInfo) delete s.freeTrialInfo;
+    if (s.url) s.url = s.url.replace(/^http:/, "https:");
+    // 抹除试听标记，这是触发 EMPTY 的重灾区
+    delete s.freeTrialInfo;
   }
 
-  // 2. 【核心重点】重新包装！
-  // 因为 SPlayer 的 Store 会去读结果的 .data 属性
-  // 我们必须在这里手动包一层，让它拿到 { data: [...] }
-  return {
-    data: songs,
-    code: 200,
-    success: true
+  // --- 重点：给数据重新穿上“信封” ---
+  // 手动构造一个符合 Axios 原始形状的对象返还给 stores
+  const finalWrapper = {
+    data: songList,
+    code: 200
   };
+
+  console.log("🚀 终极封装数据:", finalWrapper);
+  return finalWrapper;
 };
 
 export const unlockSongUrl = async (id: number) => {
