@@ -25,7 +25,7 @@ export const songQuality = (id: number) => {
   });
 };
 
-export const songUrl = (
+export const songUrl = async (
   id: number,
   level:
     | "standard"
@@ -37,7 +37,8 @@ export const songUrl = (
     | "sky"
     | "jymaster" = "exhigh",
 ) => {
-  return request({
+  // 注意：这里的 res 已经是 request.ts 剥离出的业务对象了 { code: 200, data: [...] }
+  const res: any = await request({
     url: "/song/url/v1",
     params: {
       id,
@@ -45,37 +46,36 @@ export const songUrl = (
       unblock: true, 
       timestamp: Date.now(),
     },
-  }).then((res: any) => {
-    // 1. 结构对齐
-    let dataArray = res?.data || (Array.isArray(res) ? res : null);
-    
-    if (dataArray && dataArray[0]) {
-      const s = dataArray[0];
-      
-      // 2. 【核心修复】伪装成“全权限”歌曲，绕过 playerStore 的校验
-      s.url = s.url ? s.url.replace(/^http:/, "https:") : null;
-      s.fee = 0;              // 强制免费
-      s.payed = 1;            // 强制已购
-      s.st = 0;               // 强制状态正常
-      s.pl = 128000;          // 伪造播放级别
-      s.dl = 128000;          // 伪造下载级别
-      s.sp = 128000;          // 伪造缓存级别
-      s.cp = 1;               // 强制有版权
-      s.canExtend = true;     // 允许扩展
-      
-      // 3. 【绝招】彻底抹除试听标记
-      // SPlayer 只要看到这个字段，哪怕有 URL 也会抛出 AUDIO_SOURCE_EMPTY
-      delete s.freeTrialInfo;
-      delete s.trialDuration;
-    }
-
-    // 4. 包装回原版 Store 期待的 Axios 响应结构
-    return res?.data ? res : { data: dataArray };
   });
+
+  console.log("DEBUG: request.ts 返回给 songUrl 的原始数据:", res);
+
+  // 1. 获取歌曲数组 (考虑到多种 API 返回可能)
+  const songs = res?.data || (Array.isArray(res) ? res : []);
+  
+  if (songs.length > 0) {
+    const s = songs[0];
+    // 强制洗白所有导致 SPlayer 报 EMPTY 的属性
+    s.url = s.url ? s.url.replace(/^http:/, "https:") : null;
+    s.fee = 0;
+    s.payed = 1;
+    s.st = 0;
+    s.cp = 1;
+    if (s.freeTrialInfo) delete s.freeTrialInfo;
+  }
+
+  // 2. 【核心重点】重新包装！
+  // 因为 SPlayer 的 Store 会去读结果的 .data 属性
+  // 我们必须在这里手动包一层，让它拿到 { data: [...] }
+  return {
+    data: songs,
+    code: 200,
+    success: true
+  };
 };
 
-export const unlockSongUrl = (id: number) => {
-  return songUrl(id);
+export const unlockSongUrl = async (id: number) => {
+  return await songUrl(id);
 };
 
 // 获取歌曲歌词
