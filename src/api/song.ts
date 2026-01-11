@@ -26,8 +26,8 @@ export const songQuality = (id: number) => {
 };
 
 // 获取歌曲 URL
-export const songUrl = (
-  id: number, // 扩展类型以支持你提到的多 ID 字符串调用
+export const songUrl = async (
+  id: number,
   level:
     | "standard"
     | "higher"
@@ -38,36 +38,36 @@ export const songUrl = (
     | "sky"
     | "jymaster" = "exhigh",
 ) => {
-  return request({
+  // 1. 发起请求
+  const res = await request({
     url: "/song/url/v1",
     params: {
       id,
       level,
-      unblock: true, // 强制开启歌曲解锁
+      unblock: true, // 确保开启你的 API 解锁
       timestamp: Date.now(),
     },
   });
-};
-// 这里的 hack 非常关键！
-  // 即使 API 返回说这是试听或无版权，我们也强行给它改掉
+
+  // 2. 这里的 hack 非常关键！
+  // 即使你的 API 返回数据中包含 VIP 或试听标记，我们也强行把状态改掉
+  // 这样 SPlayer 的 store (那个 js 文件) 就会认为这是一首完全正常的歌，不再报错
   if (res.data && res.data[0]) {
     res.data[0].fee = 0;            // 强行标记为免费
     res.data[0].payed = 1;          // 强行标记为已购买
-    res.data[0].code = 200;         // 确保状态码是 200
-    // 删除试听信息，防止 SPlayer 进入“试听模式”导致报错
+    res.data[0].code = 200;         // 确保歌曲状态码是 200
+    // 删除试听/预览信息，防止 SPlayer 判定“只能试听”而中断播放
     delete res.data[0].freeTrialInfo; 
   }
 
   return res;
 };
-// 获取解锁歌曲 URL
-// 修改后的解锁函数：直接调用你的 songUrl，不再走原版的第三方解锁逻辑
-export const unlockSongUrl = (id: number, keyword: string, server: SongUnlockServer) => {
-  // 这里直接返回 songUrl 的执行结果
-  // 这样无论 SPlayer 认为这首歌是否需要解锁，最终都会走你自己的 API
-  return songUrl(id); 
-};
 
+// 获取解锁歌曲 URL
+export const unlockSongUrl = async (id: number, keyword: string, server: SongUnlockServer) => {
+  // 直接重定向到上面修改后的 songUrl，绕过原版所有复杂的逻辑
+  return songUrl(id);
+};
 // 获取歌曲歌词
 export const songLyric = (id: number) => {
   return request({
