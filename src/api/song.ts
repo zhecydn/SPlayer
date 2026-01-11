@@ -43,20 +43,19 @@ export const songUrl = (
     params: {
       id,
       level,
-      unblock: true, // 仅仅添加这一个参数
       timestamp: Date.now(),
     },
-  }).then(res => {
-    // 补丁：因为 request.ts 剥离了 data 壳，我们在这里给它包回去
-    // 这样 SPlayer 的 Store 访问 res.data[0] 时才不会报错
-    return res?.data ? res : { data: res };
   });
 };
 
 // 获取解锁歌曲 URL
-export const unlockSongUrl = (id: number, keyword: string, server: any) => {
-  // 这里直接复用 songUrl，让它走你的 unblock:true 逻辑
-  return songUrl(id);
+export const unlockSongUrl = (id: number, keyword: string, server: SongUnlockServer) => {
+  const params = server === SongUnlockServer.NETEASE ? { id } : { keyword };
+  return request({
+    baseURL: "/api/unblock",
+    url: `/${server}`,
+    params: { ...params, noCookie: true },
+  });
 };
 
 // 获取歌曲歌词
