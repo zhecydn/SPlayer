@@ -46,33 +46,35 @@ export const songUrl = (
       timestamp: Date.now(),
     },
   }).then((res: any) => {
-    // 1. 结构兼容：确保 res.data[0] 存在
-    let data = res?.data || (Array.isArray(res) ? res : null);
+    // 1. 结构对齐
+    let dataArray = res?.data || (Array.isArray(res) ? res : null);
     
-    if (data && data[0]) {
-      const song = data[0];
+    if (dataArray && dataArray[0]) {
+      const s = dataArray[0];
       
-      // --- 关键：对抗 SPlayer 内部清空逻辑 ---
-      song.st = 0;       // 强制状态正常（0 表示有版权）
-      song.fee = 0;      // 强制免费（0 表示普通歌曲）
-      song.pl = 128000;  // 强制一个假播放量
-      song.dl = 0;       // 强制下载权限开启
-      song.cp = 1;       // 强制有版权标记
+      // 2. 【核心修复】伪装成“全权限”歌曲，绕过 playerStore 的校验
+      s.url = s.url ? s.url.replace(/^http:/, "https:") : null;
+      s.fee = 0;              // 强制免费
+      s.payed = 1;            // 强制已购
+      s.st = 0;               // 强制状态正常
+      s.pl = 128000;          // 伪造播放级别
+      s.dl = 128000;          // 伪造下载级别
+      s.sp = 128000;          // 伪造缓存级别
+      s.cp = 1;               // 强制有版权
+      s.canExtend = true;     // 允许扩展
       
-      // 保持请求音质的一致性，防止它因为 level 不对而二次请求
-      if (!song.level) song.level = level;
-
-      // 确保 https
-      if (song.url) song.url = song.url.replace(/^http:/, "https:");
+      // 3. 【绝招】彻底抹除试听标记
+      // SPlayer 只要看到这个字段，哪怕有 URL 也会抛出 AUDIO_SOURCE_EMPTY
+      delete s.freeTrialInfo;
+      delete s.trialDuration;
     }
 
-    // 2. 补全外壳返回
-    // 必须返回 { data: [ { url: '...', st: 0, ... } ] }
-    return res?.data ? res : { data: data };
+    // 4. 包装回原版 Store 期待的 Axios 响应结构
+    return res?.data ? res : { data: dataArray };
   });
 };
 
-export const unlockSongUrl = (id: number, keyword: string, server: any) => {
+export const unlockSongUrl = (id: number) => {
   return songUrl(id);
 };
 
