@@ -25,10 +25,7 @@ export const songQuality = (id: number) => {
   });
 };
 
-/**
- * 获取歌曲 URL
- * 增加拦截逻辑，确保数据通过 stores-BRUM-cmN.js 的严格校验
- */
+// 获取歌曲 URL
 export const songUrl = async (
   id: number,
   level:
@@ -47,42 +44,42 @@ export const songUrl = async (
       params: {
         id,
         level,
-        unblock: true, // 开启你的 API 解锁功能
+        unblock: true, // 开启解锁
         timestamp: Date.now(),
       },
     });
 
-if (res?.data?.[0]) {
-      const item = res.data[0];
-      // 1. 强制洗白数据，通过 stores 的逻辑校验
-      item.fee = 0;
-      item.payed = 1;
-      item.code = 200;
-      if (item.freeTrialInfo) delete item.freeTrialInfo;
-
-      // 2. 检查 URL
-      if (!item.url) {
-         console.warn(`ID ${id} 获取到的 URL 为空`);
+    // --- 核心修复：确保返回结构严格符合 SPlayer 预期 ---
+    // SPlayer 预期结构必须是 { data: [ { url: '...', ... } ] }
+    if (res && res.data && Array.isArray(res.data) && res.data[0]) {
+      // 强制清洗数据，绕过付费/试听逻辑
+      res.data[0].fee = 0;
+      res.data[0].payed = 1;
+      res.data[0].code = 200;
+      if (res.data[0].freeTrialInfo) delete res.data[0].freeTrialInfo;
+      
+      // 确保 URL 存在且为 HTTPS
+      if (res.data[0].url) {
+        res.data[0].url = res.data[0].url.replace(/^http:/, "https:");
       } else {
-         // 强制 HTTPS 转换
-         item.url = item.url.replace(/^http:/, "https:");
+        console.error("API 返回的 data[0] 中没有 url 字段");
       }
+    } else {
+      console.error("API 返回结构异常，未找到 data[0]", res);
     }
-    
-    // 关键：在控制台打印出最终给到播放器的对象，方便你排查
-    console.log("SPlayer Final Song Object:", res.data[0]);
 
+    // 必须确保返回的是整个 res 对象，而不是 res.data
     return res;
   } catch (error) {
-    console.error("songUrl 请求发生严重错误:", error);
-    return { data: [{ id, url: null, code: 404 }] }; // 即使失败也返回标准结构
+    console.error("songUrl 内部执行出错:", error);
+    // 即使出错也返回一个空结构，防止 stores 崩溃
+    return { data: [{ id, url: null, code: 404 }] };
   }
 };
 
-/**
- * 彻底接管解锁逻辑
- */
-export const unlockSongUrl = async (id: number) => {
+// 获取解锁歌曲 URL
+export const unlockSongUrl = async (id: number, keyword: string, server: SongUnlockServer) => {
+  // 必须加 await，确保返回的是 Promise 结果
   return await songUrl(id);
 };
 
