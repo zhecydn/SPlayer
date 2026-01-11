@@ -37,50 +37,49 @@ export const songUrl = async (
     | "sky"
     | "jymaster" = "exhigh",
 ) => {
-  // 调用你那个会“剥皮”的 request
-  const res: any = await request({
-    url: "/song/url/v1",
-    params: {
-      id,
-      level,
-      unblock: true,
-      timestamp: Date.now(),
-    },
-  });
+  console.log("🛠️ 开始请求歌曲 URL, ID:", id);
 
-  // --- 这里的逻辑是关键 ---
-  // 因为 request.ts 返回的是 data，所以这里的 res 可能是 { data: [...], code: 200 }
-  // 也可能直接就是那个数组（取决于你的后端实现）
-  
-  let songList = [];
-  if (res && Array.isArray(res.data)) {
-    songList = res.data;
-  } else if (Array.isArray(res)) {
-    songList = res;
-  } else if (res && res.url) {
-    songList = [res];
+  try {
+    // 强制把这个请求包在 try-catch 里
+    const res: any = await request({
+      url: "/song/url/v1",
+      params: { id, level, unblock: true, timestamp: Date.now() },
+    }).catch(err => {
+      console.error("🔥 Request.ts 内部抛出了错误:", err);
+      // 如果这里报错，说明是 baseURL 或 Axios 拦截器直接拦截了
+      throw err; 
+    });
+
+    console.log("📥 Request 原始响应内容:", res);
+
+    // 结构归一化
+    let list = [];
+    if (res?.data && Array.isArray(res.data)) list = res.data;
+    else if (Array.isArray(res)) list = res;
+    else if (res?.url) list = [res];
+
+    if (list.length > 0) {
+      const s = list[0];
+      s.fee = 0;
+      s.st = 0;
+      s.payed = 1;
+      if (s.url) s.url = s.url.replace(/^http:/, "https:");
+      delete s.freeTrialInfo;
+      console.log("✅ 成功洗白数据, 准备返回...");
+    } else {
+      console.warn("⚠️ API 返回了空列表，这会导致 EMPTY 报错");
+    }
+
+    const final = { data: list, code: 200 };
+    console.log("🚀 终极封装数据:", final);
+    return final;
+
+  } catch (error: any) {
+    console.error("❌ songUrl 函数彻底崩溃:", error);
+    // 这里非常关键：即便报错，我们也返回一个格式正确的空数据，
+    // 看看 SPlayer 会报什么，而不是任由它抛出堆栈错误
+    return { data: [{ id, url: null }], code: 404 };
   }
-
-  // 洗白数据，确保 SPlayer 的“洁癖”检查能通过
-  if (songList.length > 0) {
-    const s = songList[0];
-    s.fee = 0;
-    s.payed = 1;
-    s.st = 0;
-    if (s.url) s.url = s.url.replace(/^http:/, "https:");
-    // 抹除试听标记，这是触发 EMPTY 的重灾区
-    delete s.freeTrialInfo;
-  }
-
-  // --- 重点：给数据重新穿上“信封” ---
-  // 手动构造一个符合 Axios 原始形状的对象返还给 stores
-  const finalWrapper = {
-    data: songList,
-    code: 200
-  };
-
-  console.log("🚀 终极封装数据:", finalWrapper);
-  return finalWrapper;
 };
 
 export const unlockSongUrl = async (id: number) => {
