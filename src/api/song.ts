@@ -25,7 +25,10 @@ export const songQuality = (id: number) => {
   });
 };
 
-// 获取歌曲 URL
+/**
+ * 获取歌曲 URL
+ * 增加拦截逻辑，确保数据通过 stores-BRUM-cmN.js 的严格校验
+ */
 export const songUrl = async (
   id: number,
   level:
@@ -38,36 +41,51 @@ export const songUrl = async (
     | "sky"
     | "jymaster" = "exhigh",
 ) => {
-  // 1. 发起请求
-  const res = await request({
-    url: "/song/url/v1",
-    params: {
-      id,
-      level,
-      unblock: true, // 确保开启你的 API 解锁
-      timestamp: Date.now(),
-    },
-  });
+  try {
+    const res: any = await request({
+      url: "/song/url/v1",
+      params: {
+        id,
+        level,
+        unblock: true, // 开启你的 API 解锁功能
+        timestamp: Date.now(),
+      },
+    });
 
-  // 2. 这里的 hack 非常关键！
-  // 即使你的 API 返回数据中包含 VIP 或试听标记，我们也强行把状态改掉
-  // 这样 SPlayer 的 store (那个 js 文件) 就会认为这是一首完全正常的歌，不再报错
-  if (res.data && res.data[0]) {
-    res.data[0].fee = 0;            // 强行标记为免费
-    res.data[0].payed = 1;          // 强行标记为已购买
-    res.data[0].code = 200;         // 确保歌曲状态码是 200
-    // 删除试听/预览信息，防止 SPlayer 判定“只能试听”而中断播放
-    delete res.data[0].freeTrialInfo; 
+    // --- 数据清洗开始 (核心修改) ---
+    if (res && res.data && res.data[0]) {
+      const songData = res.data[0];
+      
+      // 1. 强行伪装成已购买的免费歌曲，绕过 JS 里的付费判定
+      songData.fee = 0; 
+      songData.payed = 1; 
+      songData.code = 200;
+
+      // 2. 彻底移除试听信息，防止进入试听逻辑导致 Code 0
+      if (songData.freeTrialInfo) delete songData.freeTrialInfo;
+      
+      // 3. 兜底处理：如果 url 是 http，强行换成 https (Vercel 环境必须)
+      if (songData.url && songData.url.startsWith('http://')) {
+        songData.url = songData.url.replace('http://', 'https://');
+      }
+    }
+    // --- 数据清洗结束 ---
+
+    return res;
+  } catch (err) {
+    console.error("songUrl 请求失败:", err);
+    throw err;
   }
-
-  return res;
 };
 
-// 获取解锁歌曲 URL
+/**
+ * 修改解锁函数，使其直接调用上面清洗过的数据
+ */
 export const unlockSongUrl = async (id: number, keyword: string, server: SongUnlockServer) => {
-  // 直接重定向到上面修改后的 songUrl，绕过原版所有复杂的逻辑
-  return songUrl(id);
+  // 丢弃原版的 keyword 和 server 参数，直接走我们自己的 songUrl
+  return await songUrl(id);
 };
+
 // 获取歌曲歌词
 export const songLyric = (id: number) => {
   return request({
