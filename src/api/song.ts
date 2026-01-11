@@ -52,37 +52,37 @@ export const songUrl = async (
       },
     });
 
-    // --- 数据清洗开始 (核心修改) ---
-    if (res && res.data && res.data[0]) {
-      const songData = res.data[0];
-      
-      // 1. 强行伪装成已购买的免费歌曲，绕过 JS 里的付费判定
-      songData.fee = 0; 
-      songData.payed = 1; 
-      songData.code = 200;
+if (res?.data?.[0]) {
+      const item = res.data[0];
+      // 1. 强制洗白数据，通过 stores 的逻辑校验
+      item.fee = 0;
+      item.payed = 1;
+      item.code = 200;
+      if (item.freeTrialInfo) delete item.freeTrialInfo;
 
-      // 2. 彻底移除试听信息，防止进入试听逻辑导致 Code 0
-      if (songData.freeTrialInfo) delete songData.freeTrialInfo;
-      
-      // 3. 兜底处理：如果 url 是 http，强行换成 https (Vercel 环境必须)
-      if (songData.url && songData.url.startsWith('http://')) {
-        songData.url = songData.url.replace('http://', 'https://');
+      // 2. 检查 URL
+      if (!item.url) {
+         console.warn(`ID ${id} 获取到的 URL 为空`);
+      } else {
+         // 强制 HTTPS 转换
+         item.url = item.url.replace(/^http:/, "https:");
       }
     }
-    // --- 数据清洗结束 ---
+    
+    // 关键：在控制台打印出最终给到播放器的对象，方便你排查
+    console.log("SPlayer Final Song Object:", res.data[0]);
 
     return res;
-  } catch (err) {
-    console.error("songUrl 请求失败:", err);
-    throw err;
+  } catch (error) {
+    console.error("songUrl 请求发生严重错误:", error);
+    return { data: [{ id, url: null, code: 404 }] }; // 即使失败也返回标准结构
   }
 };
 
 /**
- * 修改解锁函数，使其直接调用上面清洗过的数据
+ * 彻底接管解锁逻辑
  */
-export const unlockSongUrl = async (id: number, keyword: string, server: SongUnlockServer) => {
-  // 丢弃原版的 keyword 和 server 参数，直接走我们自己的 songUrl
+export const unlockSongUrl = async (id: number) => {
   return await songUrl(id);
 };
 
