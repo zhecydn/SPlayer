@@ -43,6 +43,7 @@ export const songUrl = (
     params: {
       id,
       level,
+      unblock: true, // 仅仅添加这一个参数
       timestamp: Date.now(),
     },
   });
