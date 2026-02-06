@@ -84,6 +84,38 @@ export const openPlaylistPageManager = async () => {
   });
 };
 
+/** 打开全屏播放器配置弹窗 */
+export const openFullscreenPlayerManager = async () => {
+  const { default: FullscreenPlayerManager } =
+    await import("@/components/Modal/Setting/FullscreenPlayerManager.vue");
+  window.$modal.create({
+    preset: "card",
+    transformOrigin: "center",
+    autoFocus: false,
+    style: { width: "500px" },
+    title: "全屏播放器配置",
+    content: () => {
+      return h(FullscreenPlayerManager);
+    },
+  });
+};
+
+/** 打开右键菜单配置弹窗 */
+export const openContextMenuManager = async () => {
+  const { default: ContextMenuManager } =
+    await import("@/components/Modal/Setting/ContextMenuManager.vue");
+  window.$modal.create({
+    preset: "card",
+    transformOrigin: "center",
+    autoFocus: false,
+    style: { width: "500px" },
+    title: "右键菜单配置",
+    content: () => {
+      return h(ContextMenuManager);
+    },
+  });
+};
+
 // 用户登录
 export const openUserLogin = async (
   showTip: boolean = false,
@@ -223,11 +255,18 @@ export const openCreatePlaylist = async (isLocal: boolean = false) => {
   });
 };
 
-// 编辑歌单
+/**
+ * 编辑歌单
+ * @param id 歌单 id
+ * @param data 歌单信息
+ * @param func 回调函数
+ * @param isLocal 是否为本地歌单
+ */
 export const openUpdatePlaylist = async (
   id: number,
   data: CoverType,
   func: () => Promise<void>,
+  isLocal: boolean = false,
 ) => {
   const { default: UpdatePlaylist } = await import("@/components/Modal/UpdatePlaylist.vue");
   const modal = window.$modal.create({
@@ -235,11 +274,12 @@ export const openUpdatePlaylist = async (
     transformOrigin: "center",
     autoFocus: false,
     style: { width: "600px" },
-    title: "编辑歌单",
+    title: isLocal ? "编辑本地歌单" : "编辑歌单",
     content: () => {
       return h(UpdatePlaylist, {
         id,
         data,
+        isLocal,
         onSuccess: () => {
           modal.destroy();
           // 触发回调
@@ -355,6 +395,21 @@ export const openAutoClose = async () => {
     title: "自动关闭",
     content: () => {
       return h(AutoClose);
+    },
+  });
+};
+
+/** 打开 AB 循环弹窗 */
+export const openABLoop = async () => {
+  const { default: ABLoop } = await import("@/components/Modal/ABLoop.vue");
+  window.$modal.create({
+    preset: "card",
+    transformOrigin: "center",
+    autoFocus: false,
+    style: { width: "500px" },
+    title: "AB 循环",
+    content: () => {
+      return h(ABLoop);
     },
   });
 };

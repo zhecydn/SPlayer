@@ -9,7 +9,9 @@
           </div>
           <!-- 喜欢歌曲 -->
           <div
-            v-if="musicStore.playSong.type !== 'radio'"
+            v-if="
+              musicStore.playSong.type !== 'radio' && settingStore.fullscreenPlayerElements.like
+            "
             class="menu-icon"
             @click="toLikeSong(musicStore.playSong, !dataStore.isLikeSong(musicStore.playSong.id))"
           >
@@ -19,6 +21,7 @@
           </div>
           <!-- 添加到歌单 -->
           <div
+            v-if="settingStore.fullscreenPlayerElements.addToPlaylist"
             class="menu-icon"
             @click.stop="openPlaylistAdd([musicStore.playSong], !!musicStore.playSong.path)"
           >
@@ -27,14 +30,22 @@
           <!-- 下载 -->
           <div
             class="menu-icon"
-            v-if="!musicStore.playSong.path && statusStore.isDeveloperMode"
+            v-if="
+              !musicStore.playSong.path &&
+              statusStore.isDeveloperMode &&
+              settingStore.fullscreenPlayerElements.download
+            "
             @click.stop="openDownloadSong(musicStore.playSong)"
           >
             <SvgIcon name="Download" />
           </div>
           <!-- 显示评论 -->
           <div
-            v-if="!musicStore.playSong.path && !statusStore.pureLyricMode"
+            v-if="
+              !musicStore.playSong.path &&
+              !statusStore.pureLyricMode &&
+              settingStore.fullscreenPlayerElements.comments
+            "
             class="menu-icon"
             @click.stop="statusStore.showPlayerComment = !statusStore.showPlayerComment"
           >
@@ -121,7 +132,7 @@
 <script setup lang="ts">
 import { usePlayerController } from "@/core/player/PlayerController";
 import { useSongManager } from "@/core/player/SongManager";
-import { useDataStore, useMusicStore, useStatusStore } from "@/stores";
+import { useDataStore, useMusicStore, useStatusStore, useSettingStore } from "@/stores";
 import { toLikeSong } from "@/utils/auth";
 import { useTimeFormat } from "@/composables/useTimeFormat";
 import { openDownloadSong, openPlaylistAdd } from "@/utils/modal";
@@ -129,6 +140,7 @@ import { openDownloadSong, openPlaylistAdd } from "@/utils/modal";
 const dataStore = useDataStore();
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
+const settingStore = useSettingStore();
 
 const songManager = useSongManager();
 const player = usePlayerController();

@@ -138,12 +138,3 @@ export const dailySignin = (type: 0 | 1 = 0) => {
     },
   });
 };
-// 获取用户 VIP 信息
-export const userVipInfo = () => {
-  return request({
-    url: "/vip/info",
-    params: {
-      timestamp: Date.now(),
-    },
-  });
-};

@@ -7,7 +7,9 @@ import {
   openSidebarHideManager,
   openHomePageSectionManager,
   openPlaylistPageManager,
+  openFullscreenPlayerManager,
   openCoverManager,
+  openContextMenuManager,
 } from "@/utils/modal";
 import { SettingConfig } from "@/types/settings";
 import { computed, ref } from "vue";
@@ -47,11 +49,7 @@ export const useAppearanceSettings = (): SettingConfig => {
             key: "themeMode",
             label: "主题模式",
             type: "select",
-            description: () =>
-              statusStore.themeBackgroundMode === "image"
-                ? "请关闭自定义背景图后调节"
-                : "调整全局主题明暗模式",
-            disabled: computed(() => statusStore.themeBackgroundMode === "image"),
+            description: "调整全局主题明暗模式",
             options: [
               { label: "跟随系统", value: "auto" },
               { label: "浅色模式", value: "light" },
@@ -61,6 +59,11 @@ export const useAppearanceSettings = (): SettingConfig => {
               get: () => settingStore.themeMode,
               set: (v) => (settingStore.themeMode = v),
             }),
+            forceIf: {
+              condition: () => statusStore.isCustomBackground,
+              forcedValue: "auto",
+              forcedDescription: "请关闭自定义背景后调节",
+            },
           },
           {
             key: "themeConfig",
@@ -131,6 +134,22 @@ export const useAppearanceSettings = (): SettingConfig => {
             action: openPlaylistPageManager,
           },
           {
+            key: "fullscreenPlayer",
+            label: "全屏播放器",
+            type: "button",
+            description: "自定义全屏播放器的显示元素（喜欢、下载、评论等）",
+            buttonLabel: "配置",
+            action: openFullscreenPlayerManager,
+          },
+          {
+            key: "contextMenu",
+            label: "右键菜单",
+            type: "button",
+            description: "自定义歌曲右键菜单的显示选项",
+            buttonLabel: "配置",
+            action: openContextMenuManager,
+          },
+          {
             key: "menuShowCover",
             label: "侧边栏显示歌单封面",
             type: "switch",
@@ -189,40 +208,49 @@ export const useAppearanceSettings = (): SettingConfig => {
               get: () => settingStore.playerType,
               set: (v) => (settingStore.playerType = v),
             }),
-            children: [
-              {
-                key: "playerStyleRatio",
-                label: "封面 / 歌词占比",
-                type: "slider",
-                description: "调整全屏播放器的封面与歌词的宽度比例",
-                min: 30,
-                max: 70,
-                step: 1,
-                marks: { 50: "默认" },
-                show: () => settingStore.playerType !== "fullscreen",
-                formatTooltip: (v) => `${v}%`,
-                value: computed({
-                  get: () => settingStore.playerStyleRatio,
-                  set: (v) => (settingStore.playerStyleRatio = v),
-                }),
-              },
-              {
-                key: "playerFullscreenGradient",
-                label: "封面过渡位置",
-                type: "slider",
-                description: "调整全屏封面右侧的渐变过渡位置",
-                show: () => settingStore.playerType === "fullscreen",
-                min: 0,
-                max: 100,
-                step: 1,
-                marks: { 15: "默认" },
-                formatTooltip: (v) => `${v}%`,
-                value: computed({
-                  get: () => settingStore.playerFullscreenGradient,
-                  set: (v) => (settingStore.playerFullscreenGradient = v),
-                }),
-              },
-            ],
+            condition: () => true,
+            children: computed(() => {
+              const type = settingStore.playerType;
+              if (type === "cover" || type === "record") {
+                return [
+                  {
+                    key: "playerStyleRatio",
+                    label: "封面 / 歌词占比",
+                    type: "slider",
+                    description: "调整全屏播放器的封面与歌词的宽度比例",
+                    min: 30,
+                    max: 70,
+                    step: 1,
+                    marks: { 50: "默认" },
+                    formatTooltip: (v) => `${v}%`,
+                    value: computed({
+                      get: () => settingStore.playerStyleRatio,
+                      set: (v) => (settingStore.playerStyleRatio = v),
+                    }),
+                  },
+                ];
+              }
+              if (type === "fullscreen") {
+                return [
+                  {
+                    key: "playerFullscreenGradient",
+                    label: "封面过渡位置",
+                    type: "slider",
+                    description: "调整全屏封面右侧的渐变过渡位置",
+                    min: 0,
+                    max: 100,
+                    step: 1,
+                    marks: { 15: "默认" },
+                    formatTooltip: (v) => `${v}%`,
+                    value: computed({
+                      get: () => settingStore.playerFullscreenGradient,
+                      set: (v) => (settingStore.playerFullscreenGradient = v),
+                    }),
+                  },
+                ];
+              }
+              return [];
+            }),
           },
           {
             key: "playerBackgroundType",
@@ -238,6 +266,7 @@ export const useAppearanceSettings = (): SettingConfig => {
               get: () => settingStore.playerBackgroundType,
               set: (v) => (settingStore.playerBackgroundType = v),
             }),
+            condition: () => settingStore.playerBackgroundType === "animation",
             children: [
               {
                 key: "playerBackgroundFps",
@@ -272,7 +301,7 @@ export const useAppearanceSettings = (): SettingConfig => {
                 description:
                   "设置当前渲染缩放比例，默认 0.5。适当提高此值（如 1.0 或 1.5）可以减少分界线锯齿，让效果更好，但也会增加显卡压力",
                 min: 0.1,
-                max: 10,
+                max: 3,
                 show: () => settingStore.playerBackgroundType === "animation",
                 value: computed({
                   get: () => settingStore.playerBackgroundRenderScale,
@@ -332,26 +361,31 @@ export const useAppearanceSettings = (): SettingConfig => {
             label: "动态封面",
             type: "switch",
             description: "可展示部分歌曲的动态封面，仅在封面模式有效",
-            disabled: () => isLogin() !== 1,
             value: computed({
               get: () => settingStore.dynamicCover,
               set: (v) => (settingStore.dynamicCover = v),
             }),
+            forceIf: {
+              condition: () => isLogin() !== 1,
+              forcedValue: false,
+              forcedTitle: "请先正常登录",
+            },
           },
           {
             key: "showSpectrums",
             label: "音乐频谱",
             type: "switch",
             show: isElectron,
-            description:
-              settingStore.playbackEngine === "mpv"
-                ? "MPV 引擎暂不支持显示音乐频谱"
-                : "开启音乐频谱会影响性能或增加内存占用，如遇问题请关闭",
-            disabled: () => settingStore.playbackEngine === "mpv",
+            description: "开启音乐频谱会影响性能或增加内存占用，如遇问题请关闭",
             value: computed({
               get: () => settingStore.showSpectrums,
               set: (v) => (settingStore.showSpectrums = v),
             }),
+            forceIf: {
+              condition: () => settingStore.playbackEngine === "mpv",
+              forcedValue: false,
+              forcedDescription: "MPV 引擎暂不支持显示音乐频谱",
+            },
           },
         ],
       },
@@ -439,6 +473,61 @@ export const useAppearanceSettings = (): SettingConfig => {
             value: computed({
               get: () => settingStore.timeFormat,
               set: (v) => (settingStore.timeFormat = v),
+            }),
+          },
+        ],
+      },
+      {
+        title: "歌曲列表显示",
+        items: [
+          {
+            key: "showSongAlbum",
+            label: "显示专辑",
+            type: "switch",
+            description: "在歌曲列表中显示专辑列",
+            value: computed({
+              get: () => settingStore.showSongAlbum,
+              set: (v) => (settingStore.showSongAlbum = v),
+            }),
+          },
+          {
+            key: "showSongArtist",
+            label: "显示歌手",
+            type: "switch",
+            description: "在歌曲列表中显示歌手信息",
+            value: computed({
+              get: () => settingStore.showSongArtist,
+              set: (v) => (settingStore.showSongArtist = v),
+            }),
+          },
+          {
+            key: "showSongDuration",
+            label: "显示时长",
+            type: "switch",
+            description: "在歌曲列表中显示时长列",
+            value: computed({
+              get: () => settingStore.showSongDuration,
+              set: (v) => (settingStore.showSongDuration = v),
+            }),
+          },
+          {
+            key: "showSongOperations",
+            label: "显示操作",
+            type: "switch",
+            description: "在歌曲列表中显示操作列（收藏等）",
+            value: computed({
+              get: () => settingStore.showSongOperations,
+              set: (v) => (settingStore.showSongOperations = v),
+            }),
+          },
+          {
+            key: "showSongQuality",
+            label: "显示歌曲音质",
+            type: "switch",
+            description: "是否列表中显示歌曲音质",
+            value: computed({
+              get: () => settingStore.showSongQuality,
+              set: (v) => (settingStore.showSongQuality = v),
             }),
           },
           {

@@ -238,6 +238,23 @@
   transform: translateX(-100%);
 }
 
+// 歌词滚动动画
+.lyric-slide-enter-active,
+.lyric-slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.55, 0, 0.1, 1);
+}
+.lyric-slide-enter-from {
+  opacity: 0;
+  transform: translateY(100%);
+}
+.lyric-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+.lyric-slide-leave-active {
+  position: absolute;
+}
+
 @keyframes skeleton-loading {
   0% {
     background-position: 100% 50%;

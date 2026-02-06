@@ -1,4 +1,5 @@
-import { type LyricLine, parseLrc } from "@applemusic-like-lyrics/lyric";
+import type { LyricLine } from "@applemusic-like-lyrics/lyric";
+import { parseLrc } from "../parseLrc";
 
 /**
  * LRC 格式类型
@@ -17,11 +18,11 @@ type LyricWord = { word: string; startTime: number; endTime: number; romanWord: 
 
 // 预编译正则表达式
 const META_TAG_REGEX = /^\[[a-z]+:/i;
-const TIME_TAG_REGEX = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/g;
-const ENHANCED_TIME_TAG_REGEX = /<(\d{2}):(\d{2})\.(\d{2,3})>/;
-const WORD_BY_WORD_REGEX = /\[(\d{2}):(\d{2})\.(\d{2,3})\]([^[\]]*)/g;
-const ENHANCED_WORD_REGEX = /<(\d{2}):(\d{2})\.(\d{2,3})>([^<]*)/g;
-const LINE_TIME_REGEX = /^\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+const TIME_TAG_REGEX = /\[(\d{2}):(\d{2})\.(\d{1,})\]/g;
+const ENHANCED_TIME_TAG_REGEX = /<(\d{2}):(\d{2})\.(\d{1,})>/;
+const WORD_BY_WORD_REGEX = /\[(\d{2}):(\d{2})\.(\d{1,})\]([^[\]]*)/g;
+const ENHANCED_WORD_REGEX = /<(\d{2}):(\d{2})\.(\d{1,})>([^<]*)/g;
+const LINE_TIME_REGEX = /^\[(\d{2}):(\d{2})\.(\d{1,})\]/;
 
 /**
  * 解析时间戳为毫秒
@@ -29,7 +30,9 @@ const LINE_TIME_REGEX = /^\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
 const parseTimeToMs = (min: string, sec: string, ms: string): number => {
   const minutes = parseInt(min, 10);
   const seconds = parseInt(sec, 10);
-  const milliseconds = ms.length === 2 ? parseInt(ms, 10) * 10 : parseInt(ms, 10);
+  // treat ms part as fraction of second
+  const fracStr = "0." + ms;
+  const milliseconds = parseFloat(fracStr) * 1000;
   return minutes * 60 * 1000 + seconds * 1000 + milliseconds;
 };
 
@@ -420,6 +423,10 @@ export const lyricLinesToTTML = (lines: LyricLine[]): string => {
 
     // 添加逐字歌词
     for (const word of line.words) {
+      // 过滤无效的空词（内容为空且时长为0）
+      if (!word.word || word.startTime === word.endTime) {
+        continue;
+      }
       const wordStart = formatTime(word.startTime);
       const wordEnd = formatTime(word.endTime);
       ttml += `        <span begin="${wordStart}" end="${wordEnd}">${escapeXml(word.word)}</span>\n`;

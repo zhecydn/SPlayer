@@ -6,7 +6,7 @@
         v-if="node.type === 'group'"
         class="slide-in-item group-title"
         :class="{ 'first-group': !!node.isFirst }"
-        :style="{ '--delay': highlightKey ? '0s' : `${index * 0.05}s` }"
+        :style="{ '--delay': highlightKey ? '0s' : `${Math.min(index, 15) * 0.05}s` }"
       >
         <n-h3 prefix="bar">
           {{ node.data.title }}
@@ -29,7 +29,7 @@
         :item="node.data"
         class="slide-in-item"
         :highlighted="node.data.key === highlightKey"
-        :style="{ '--delay': highlightKey ? '0s' : `${index * 0.05}s` }"
+        :style="{ '--delay': highlightKey ? '0s' : `${Math.min(index, 15) * 0.05}s` }"
       />
     </template>
   </div>

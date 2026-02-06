@@ -1,8 +1,8 @@
 <template>
   <div
     :id="'setting-' + item.key"
-    class="setting-item-wrapper"
     :class="{ highlighted: highlighted }"
+    class="setting-item-wrapper"
   >
     <template v-if="item.noWrapper">
       <component
@@ -53,7 +53,7 @@
           class="set"
           :round="false"
           :disabled="isDisabled"
-          :title="resolve(props.item.title)"
+          :title="title"
           v-bind="item.componentProps"
         />
 
@@ -64,7 +64,7 @@
           :options="normalizedOptions"
           class="set"
           :disabled="isDisabled"
-          :title="resolve(props.item.title)"
+          :title="title"
           v-bind="item.componentProps"
         />
 
@@ -77,7 +77,7 @@
           :max="resolve(item.max)"
           :step="resolve(item.step)"
           :disabled="isDisabled"
-          :title="resolve(props.item.title)"
+          :title="title"
           v-bind="item.componentProps"
         >
           <template #prefix v-if="item.prefix">{{ resolve(item.prefix) }}</template>
@@ -93,7 +93,7 @@
           :type="item.componentProps?.type || 'text'"
           :show-password-on="item.componentProps?.showPasswordOn"
           :disabled="isDisabled"
-          :title="resolve(props.item.title)"
+          :title="title"
           v-bind="item.componentProps"
         >
           <template #prefix v-if="item.prefix">{{ resolve(item.prefix) }}</template>
@@ -111,7 +111,7 @@
           :marks="item.marks"
           :format-tooltip="item.formatTooltip"
           :disabled="isDisabled"
-          :title="resolve(props.item.title)"
+          :title="title"
           v-bind="item.componentProps"
         />
 
@@ -123,7 +123,7 @@
           secondary
           @click="handleAction"
           :disabled="isDisabled"
-          :title="resolve(props.item.title)"
+          :title="title"
           v-bind="item.componentProps"
         >
           {{ resolve(item.buttonLabel) || "配置" }}
@@ -137,7 +137,7 @@
           :show-alpha="item.componentProps?.showAlpha ?? false"
           :modes="item.componentProps?.modes ?? ['hex']"
           :disabled="isDisabled"
-          :title="resolve(props.item.title)"
+          :title="title"
           @complete="handleAction"
         />
 
@@ -152,11 +152,11 @@
     </n-card>
 
     <!-- Children (Nested items) -->
-    <template v-if="item.children && item.children.length > 0">
+    <template v-if="resolvedChildren && resolvedChildren.length > 0">
       <n-collapse-transition :show="isChildrenExpanded">
         <!-- 递归渲染子项 -->
         <SettingItemRenderer
-          v-for="child in item.children"
+          v-for="child in resolvedChildren"
           :key="child.key"
           :item="child"
           v-show="isShow(child)"
@@ -178,8 +178,8 @@ const props = defineProps<{
   highlighted?: boolean;
 }>();
 
-// 数据双向绑定处理
-const modelValue = computed({
+// 基础数据双向绑定处理
+const baseModelValue = computed({
   get: () => {
     if (props.item.value !== undefined) {
       return toValue(props.item.value);
@@ -195,11 +195,63 @@ const modelValue = computed({
   },
 });
 
-// 计算禁用状态
+// 强制显示条件判断
+const isForcedConditionMet = computed(() => {
+  if (!props.item.forceIf) return false;
+  const condition = props.item.forceIf.condition;
+  if (typeof condition === "function") {
+    return condition();
+  }
+  return unref(condition);
+});
+
+// 最终使用的 modelValue
+const modelValue = computed({
+  get: () => {
+    if (isForcedConditionMet.value) {
+      const forcedValueRef = props.item.forceIf!.forcedValue;
+      if (forcedValueRef !== undefined) return toValue(forcedValueRef);
+    }
+    return baseModelValue.value;
+  },
+  set: (val) => {
+    // 如果条件满足，则不允许修改原始值（或者视需求而定，通常互斥时不仅显示强制值，且禁用）
+    // 这里的逻辑是：如果被强制显示了，set 操作不应该影响原始值，或者应该被忽略
+    if (!isForcedConditionMet.value) {
+      baseModelValue.value = val;
+    }
+  },
+});
+
+// 禁用状态
 const isDisabled = computed(() => {
+  if (isForcedConditionMet.value) return true;
   if (props.item.disabled === undefined) return false;
-  if (typeof props.item.disabled === "function") return props.item.disabled();
   return toValue(props.item.disabled);
+});
+
+// 描述内容
+const descriptionContent = computed(() => {
+  if (isForcedConditionMet.value) {
+    const forcedDescriptionRef = props.item.forceIf!.forcedDescription;
+    if (forcedDescriptionRef !== undefined) return toValue(forcedDescriptionRef);
+  }
+  return toValue(props.item.description);
+});
+
+// 鼠标悬停提示
+const title = computed(() => {
+  if (isForcedConditionMet.value) {
+    const forcedTitleRef = props.item.forceIf!.forcedTitle;
+    if (forcedTitleRef !== undefined) return toValue(forcedTitleRef);
+  }
+  return toValue(props.item.title);
+});
+
+// 解析子项
+const resolvedChildren = computed(() => {
+  if (!props.item.children) return [];
+  return toValue(props.item.children);
 });
 
 // 计算子项是否展开
@@ -213,30 +265,19 @@ const isChildrenExpanded = computed(() => {
 // 判断是否显示
 const isShow = (childItem: SettingItem) => {
   if (childItem.show === undefined) return true;
-  if (typeof childItem.show === "function") return childItem.show();
   return toValue(childItem.show);
 };
 
 // 判断额外按钮是否显示
 const isExtraButtonShow = (action: any) => {
   if (action.show === undefined) return true;
-  if (typeof action.show === "function") return action.show();
   return toValue(action.show);
 };
 
 // 规范化选项数据
 const normalizedOptions = computed(() => {
   if (!props.item.options) return [];
-  if (typeof props.item.options === "function") return props.item.options();
   return toValue(props.item.options);
-});
-
-// 解析描述内容
-const descriptionContent = computed(() => {
-  if (isRef(props.item.description)) {
-    return props.item.description.value;
-  }
-  return props.item.description;
 });
 
 // 获取属性值

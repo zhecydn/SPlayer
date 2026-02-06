@@ -73,7 +73,7 @@
             <!-- 操作 -->
             <n-flex align="center" justify="center" class="actions">
               <n-button
-                v-if="item.status !== 'downloading'"
+                v-if="item.status === 'failed'"
                 type="primary"
                 secondary
                 strong
@@ -135,7 +135,7 @@ const handleRemoveDownload = (id: number) => {
       align-items: center;
       padding: 0 12px;
       height: 40px;
-      background-color: var(--background-hex);
+      // background-color: var(--background-hex);
       font-weight: normal;
 
       .n-text {

@@ -1,6 +1,6 @@
 import type { SongLevelType } from "@/types/main";
 import type { ImageRenderToolbarProps } from "naive-ui";
-import { compact, findKey, keys, pick, takeWhile, reduce } from "lodash-es";
+import { reduce } from "lodash-es";
 
 // 音质数据
 export const songLevelData = {
@@ -62,43 +62,6 @@ export const DJ_MODE_KEYWORDS = ["DJ", "抖音", "0.9", "0.8", "网红", "车载
 
 /** 歌曲脏标（Explicit Content）位掩码 */
 export const EXPLICIT_CONTENT_MARK = 1048576;
-
-/** VIP 类型 */
-export const VIP_LEVELS = {
-  NORMAL: 0,
-  VIP: 10,
-  VIP_ANNUAL: 110, // 110 detected as VIP
-  SVIP: 11,
-} as const;
-
-/**
- * 不同 VIP 等级允许的音质
- * Normal: Standard, Higher, ExHigh
- * VIP: Normal + Lossless, Hi-Res, Jyeffect
- * SVIP: All
- */
-export const AUTHORIZED_QUALITY_LEVELS = {
-  NORMAL: ["standard", "higher", "exhigh"],
-  VIP: ["standard", "higher", "exhigh", "lossless", "hires", "jyeffect"],
-} as const;
-
-/**
- * 根据传入的 level，筛选出包含该 level 及之前的音质数据
- * @param level 音质等级名称
- * @returns 包含指定 level 及之前音质数据的部分 songLevelData
- */
-export function getLevelsUpTo(level: string): Partial<typeof songLevelData> {
-  // 从数组中取出符合条件的所有元素
-  const resultKeys = takeWhile(
-    keys(songLevelData),
-    (key) => songLevelData[key as SongLevelType].level !== level,
-  );
-  // 包含传入的 level
-  const levelKey = findKey(songLevelData, { level });
-  if (levelKey) resultKeys.push(levelKey);
-  // 过滤空值
-  return pick(songLevelData, compact(resultKeys));
-}
 
 /**
  * 获取音质列表

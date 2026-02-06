@@ -73,7 +73,6 @@
 import type { SongType, SongLevelType } from "@/types/main";
 import { useSettingStore } from "@/stores";
 import { songLevelData, getSongLevelsData, AI_AUDIO_LEVELS } from "@/utils/meta";
-import { filterAuthorizedQualityOptions } from "@/utils/auth";
 import { formatFileSize } from "@/utils/helper";
 import { openSetting } from "@/utils/modal";
 import { isElectron } from "@/utils/env";
@@ -113,9 +112,6 @@ const canDownload = computed(() => {
 const qualityOptions = computed(() => {
   const levels = pick(songLevelData, ["l", "m", "h", "sq", "hr", "je", "sk", "db", "jm"]);
   let allData = getSongLevelsData(levels);
-
-  // 根据 VIP 状态过滤
-  allData = filterAuthorizedQualityOptions(allData);
 
   if (settingStore.disableAiAudio) {
     allData = allData.filter((item) => {

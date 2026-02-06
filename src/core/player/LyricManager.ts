@@ -3,13 +3,20 @@ import { songLyric, songLyricTTML } from "@/api/song";
 import { keywords as defaultKeywords, regexes as defaultRegexes } from "@/assets/data/exclude";
 import { useCacheManager } from "@/core/resource/CacheManager";
 import { useMusicStore, useSettingStore, useStatusStore, useStreamingStore } from "@/stores";
-import { type SongLyric } from "@/types/lyric";
-import { SongType } from "@/types/main";
+import type { LyricPriority, SongLyric } from "@/types/lyric";
+import type { SongType } from "@/types/main";
 import { isElectron } from "@/utils/env";
-import { alignLyrics, isWordLevelFormat, parseQRCLyric, parseSmartLrc } from "@/utils/lyricParser";
-import { stripLyricMetadata } from "@/utils/lyricStripper";
+import { applyBracketReplacement } from "@/utils/lyric/lyricFormat";
+import {
+  alignLyrics,
+  isWordLevelFormat,
+  parseQRCLyric,
+  parseSmartLrc,
+} from "@/utils/lyric/lyricParser";
+import { stripLyricMetadata } from "@/utils/lyric/lyricStripper";
 import { getConverter } from "@/utils/opencc";
-import { type LyricLine, parseLrc, parseTTML, parseYrc } from "@applemusic-like-lyrics/lyric";
+import { parseLrc } from "@/utils/parseLrc";
+import { type LyricLine, parseTTML, parseYrc } from "@applemusic-like-lyrics/lyric";
 import { cloneDeep, escapeRegExp, isEmpty } from "lodash-es";
 
 class LyricManager {
@@ -252,6 +259,19 @@ class LyricManager {
   }
 
   /**
+   * 切换歌词源优先级
+   * @param source 优先级标识
+   */
+  public switchLyricSource(source: LyricPriority) {
+    const settingStore = useSettingStore();
+    const musicStore = useMusicStore();
+    settingStore.lyricPriority = source;
+    if (musicStore.playSong) {
+      this.handleLyric(musicStore.playSong);
+    }
+  }
+
+  /**
    * 处理在线歌词
    * @param id 歌曲 ID
    * @returns 歌词数据
@@ -273,7 +293,9 @@ class LyricManager {
 
     // 处理 QQ 音乐歌词
     const adoptQQMusic = async () => {
-      if (!settingStore.preferQQMusicLyric) return;
+      // 检查开关 (如果显式选了 QM 优先, 则忽略开关限制? 不, UI上限制了)
+      if (!settingStore.enableQQMusicLyric && settingStore.lyricPriority !== "qm") return;
+
       const song = musicStore.playSong;
       if (!song) return;
       const qqLyric = await this.fetchQQMusicLyric(song);
@@ -288,7 +310,7 @@ class LyricManager {
         result.lrcData = qqLyric.lrcData;
         if (!qqMusicAdopted) qqMusicAdopted = true;
       }
-      // 先返回一次，避免 TTML 请求过慢
+      // 如果采用了, 立即应用
       if (qqMusicAdopted) {
         let lyricData = this.handleLyricExclude(result);
         lyricData = await this.applyChineseVariant(lyricData);
@@ -298,7 +320,7 @@ class LyricManager {
 
     // 处理 TTML 歌词
     const adoptTTML = async () => {
-      if (!settingStore.enableOnlineTTMLLyric) return;
+      if (!settingStore.enableOnlineTTMLLyric && settingStore.lyricPriority !== "ttml") return;
       if (typeof id !== "number") return;
       let ttmlContent: string | null = await this.getRawLyricCache(id, "ttml");
       if (!ttmlContent) {
@@ -313,12 +335,20 @@ class LyricManager {
       const parsed = parseTTML(sorted);
       const lines = parsed?.lines || [];
       if (!lines.length) return;
-      result.yrcData = lines;
-      ttmlAdopted = true;
+
+      // 只有当没有 YRC 数据或优先级为 TTML 或 自动模式(TTML > QM) 时才覆盖
+      if (
+        !result.yrcData.length ||
+        settingStore.lyricPriority === "ttml" ||
+        settingStore.lyricPriority === "auto"
+      ) {
+        result.yrcData = lines;
+        ttmlAdopted = true;
+      }
     };
+
     // 处理 LRC 歌词
     const adoptLRC = async () => {
-      // 如果已经有 QQ 音乐歌词，跳过网易云
       if (qqMusicAdopted) return;
       if (typeof id !== "number") return;
       let data: any = null;
@@ -361,21 +391,40 @@ class LyricManager {
           yrcLines = this.alignLyrics(yrcLines, parseLrc(data.yromalrc.lyric), "romanLyric");
       }
       if (lrcLines.length) result.lrcData = lrcLines;
-      // 如果没有 TTML，则采用 网易云 YRC
+      // 如果没有 TTML 且没有 QM YRC，则采用 网易云 YRC
       if (!result.yrcData.length && yrcLines.length) {
+        // 再次确认优先级，如果是 TTML 优先但 TTML 没结果，这里可以用 YRC
         result.yrcData = yrcLines;
       }
-      // 先返回一次，避免 TTML 请求过慢
+      // 先返回一次
       let lyricData = this.handleLyricExclude(result);
       lyricData = await this.applyChineseVariant(lyricData);
       this.setFinalLyric(lyricData, req);
     };
-    // 优先获取 QQ 音乐歌词
-    if (settingStore.preferQQMusicLyric) {
+    // 执行优先策略
+    const priority = settingStore.lyricPriority;
+    if (priority === "qm") {
       await adoptQQMusic();
+      // 如果 QM 没结果，回退到 Default
+      if (!qqMusicAdopted) {
+        await Promise.all([adoptTTML(), adoptLRC()]);
+      }
+    } else if (priority === "official") {
+      // 仅使用官方源
+      await adoptLRC();
+    } else if (priority === "ttml") {
+      await adoptTTML();
+      await adoptLRC();
+      if (!ttmlAdopted && !result.lrcData.length) {
+        await adoptQQMusic();
+      }
+    } else {
+      if (settingStore.enableQQMusicLyric) {
+        await adoptQQMusic();
+      }
+      await Promise.all([adoptTTML(), adoptLRC()]);
     }
-    await Promise.allSettled([adoptTTML(), adoptLRC()]);
-    // 优先使用 TTML
+    // 优先使用 TTML (状态标记)
     statusStore.usingTTMLLyric = ttmlAdopted;
     // 设置是否使用 QRC 歌词（来自 QQ 音乐，且未被 TTML 覆盖）
     statusStore.usingQRCLyric = qqMusicAdopted && !ttmlAdopted;
@@ -677,195 +726,6 @@ class LyricManager {
   }
 
   /**
-   * 替换歌词括号内容
-   * @param lyricData 歌词数据
-   * @returns 替换后的歌词数据
-   */
-  private applyBracketReplacement(lyricData: SongLyric): SongLyric {
-    const settingStore = useSettingStore();
-    if (!settingStore.replaceLyricBrackets) {
-      return lyricData;
-    }
-
-    const newLyricData = cloneDeep(lyricData);
-
-    // --- Configuration Helper ---
-    // Helper to determine the replacement strategy based on settings
-    const getReplacementConfig = () => {
-      const preset = settingStore.bracketReplacementPreset || "dash";
-      const custom = settingStore.customBracketReplacement || "-";
-      let startStr = " - ";
-      let endStr = " ";
-      let isEnclosure = false;
-
-      if (preset === "angleBrackets") {
-        startStr = "〔";
-        endStr = "〕";
-        isEnclosure = true;
-      } else if (preset === "cornerBrackets") {
-        startStr = "「";
-        endStr = "」";
-        isEnclosure = true;
-      } else if (preset === "custom") {
-        const trimmed = custom.trim();
-        // Heuristic: if length is 2 and not just dashes, treat as pair (e.g. "()")
-        // This allows users to input "()" to mean replace ( with ( and ) with )
-        if (trimmed.length === 2 && trimmed[0] !== trimmed[1] && !trimmed.includes("-")) {
-          startStr = trimmed[0];
-          endStr = trimmed[1];
-          isEnclosure = true;
-        } else {
-          // Treat as separator
-          startStr = " " + trimmed + " ";
-          startStr = startStr.replace(/\s+/g, " "); // Normalize spaces
-          endStr = " ";
-          isEnclosure = false;
-        }
-      }
-      return { startStr, endStr, isEnclosure };
-    };
-
-    const { startStr, endStr, isEnclosure } = getReplacementConfig();
-
-    // --- Processing Helpers ---
-
-    // Process a string (used for translations and romaji)
-    const processString = (str: string): string => {
-      if (!str) return str;
-
-      // If the entire string is enclosed in brackets (e.g. "(Chorus)"), remove them if not in enclosure mode
-      if (!isEnclosure && /^\s*[\(（][^()（）]*[\)）]\s*$/.test(str)) {
-        return str
-          .replace(/^\s*[\(（]/, "")
-          .replace(/[\)）]\s*$/, "")
-          .trim();
-      }
-
-      let res = str.replace(/[\(（]/g, startStr);
-      if (isEnclosure) {
-        res = res.replace(/[\)）]/g, endStr);
-      } else {
-        // Separator mode:
-        // 1. Remove ) if it's at the end of the string (effectively just a closing marker)
-        // 2. Otherwise replace ) with endStr (usually space)
-        res = res
-          .replace(/[\)）](?=\s*$)/g, "")
-          .replace(/[\)）]/g, endStr);
-
-        // Cleanup double dashes if the separator contains a dash
-        if (startStr.includes("-")) {
-          res = res.replace(/(?:\s*-\s*){2,}/g, " - ");
-        }
-      }
-      return res;
-    };
-
-    // Process a single lyric line (LRC/YRC)
-    const processLine = (line: LyricLine) => {
-      // 1. Check for "Full Bracket" line (e.g. "(Music)")
-      // If the whole line is in brackets and we are NOT in enclosure mode (e.g. dash mode),
-      // we likely want to strip the brackets entirely instead of replacing them with dashes.
-      const fullText = line.words.map((w) => w.word).join("");
-      const isFullBracket = /^\s*[\(（][^()（）]*[\)）]\s*$/.test(fullText);
-
-      if (isFullBracket && !isEnclosure) {
-        // Remove the first opening bracket found in the words
-        let foundStart = false;
-        for (const word of line.words) {
-          if (foundStart) break;
-          if (/[\(（]/.test(word.word)) {
-            word.word = word.word.replace(/[\(（]/, "");
-            foundStart = true;
-          }
-        }
-        // Remove the last closing bracket found in the words
-        let foundEnd = false;
-        for (let i = line.words.length - 1; i >= 0; i--) {
-          if (foundEnd) break;
-          const word = line.words[i];
-          if (/[\)）]/.test(word.word)) {
-            // Find the last occurrence of ) or ）
-            const lastIndex = Math.max(word.word.lastIndexOf(")"), word.word.lastIndexOf("）"));
-            if (lastIndex !== -1) {
-              word.word =
-                word.word.substring(0, lastIndex) + word.word.substring(lastIndex + 1);
-              foundEnd = true;
-            }
-          }
-        }
-      } else {
-        // Normal replacement logic
-        line.words.forEach((word, index) => {
-          // Replace opening brackets
-          word.word = word.word.replace(/[\(（]/g, startStr);
-
-          if (isEnclosure) {
-            // Enclosure mode: simply replace closing brackets with endStr
-            word.word = word.word.replace(/[\)）]/g, endStr);
-          } else {
-            // Separator mode: logic to handle closing brackets nicely
-            word.word = word.word.replace(/[\)）]/g, (_, offset, string) => {
-              const isAtEnd = offset === string.length - 1;
-              // If ) is at the end of the word...
-              if (isAtEnd) {
-                // ...and it's the last word of the line, remove it (it's just closing the line)
-                if (index === line.words.length - 1) {
-                  return "";
-                } else {
-                  // ...otherwise it's a separator between this word and the next
-                  return endStr;
-                }
-              } else {
-                // If not at end of word, it's a separator
-                return endStr;
-              }
-            });
-          }
-        });
-
-        // Cleanup double dashes (only for separator mode with dash)
-        if (!isEnclosure && startStr.includes("-")) {
-          line.words.forEach((word, index) => {
-            // 1. Intra-word cleanup: " -  - " -> " - "
-            word.word = word.word.replace(/(?:\s*-\s*){2,}/g, " - ");
-
-            // 2. Inter-word cleanup: Prev word ends with dash, current starts with dash
-            if (index > 0) {
-              const prev = line.words[index - 1];
-              if (/-\s*$/.test(prev.word) && /^\s*-/.test(word.word)) {
-                // Remove trailing dash from previous word
-                prev.word = prev.word.replace(/-\s*$/, "");
-                // Ensure current word starts with proper separator
-                if (!/^\s*-\s+/.test(word.word)) {
-                  word.word = " - " + word.word.replace(/^\s*-\s*/, "");
-                }
-              }
-            }
-          });
-        }
-      }
-
-      // Process extra fields
-      if (line.translatedLyric) {
-        line.translatedLyric = processString(line.translatedLyric);
-      }
-      if (line.romanLyric) {
-        line.romanLyric = processString(line.romanLyric);
-      }
-    };
-
-    const processLines = (lines: LyricLine[] | undefined) => {
-      if (!lines) return;
-      lines.forEach(processLine);
-    };
-
-    processLines(newLyricData.lrcData);
-    processLines(newLyricData.yrcData);
-
-    return newLyricData;
-  }
-
-  /**
    * 比较歌词数据是否相同
    * @param oldData 旧歌词数据
    * @param newData 新歌词数据
@@ -927,14 +787,11 @@ class LyricManager {
     const statusStore = useStatusStore();
     // 若非本次
     if (this.activeLyricReq !== req) return;
-
     // 应用括号替换
-    lyricData = this.applyBracketReplacement(lyricData);
-
+    lyricData = applyBracketReplacement(lyricData);
     // 规范化时间
     this.normalizeLyricLines(lyricData.yrcData);
     this.normalizeLyricLines(lyricData.lrcData);
-
     // 如果只有逐字歌词
     if (lyricData.lrcData.length === 0 && lyricData.yrcData.length > 0) {
       // 构成普通歌词

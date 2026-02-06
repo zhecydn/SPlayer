@@ -633,7 +633,7 @@ export class FFmpegAudioPlayer extends BaseAudioPlayer {
         this.playerState = "idle";
         break;
     }
-    return super.dispatch(type, ...(args as any));
+    return super.dispatch(type, ...args);
   }
 
   private reset() {

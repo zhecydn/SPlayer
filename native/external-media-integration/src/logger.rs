@@ -1,32 +1,13 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::OnceLock,
-};
+use std::{fs, path::PathBuf, sync::OnceLock};
 
-use anyhow::{
-    Context,
-    Result,
-};
+use anyhow::{Context, Result};
 use time::macros::format_description;
-use tracing::{
-    error,
-    trace,
-};
-use tracing_appender::{
-    non_blocking::WorkerGuard,
-    rolling::RollingFileAppender,
-};
+use tracing::{error, trace};
+use tracing_appender::{non_blocking::WorkerGuard, rolling::RollingFileAppender};
 use tracing_subscriber::{
     Layer,
-    filter::{
-        LevelFilter,
-        Targets,
-    },
-    fmt::{
-        self,
-        time::LocalTime,
-    },
+    filter::{LevelFilter, Targets},
+    fmt::{self, time::LocalTime},
     layer::SubscriberExt,
     util::SubscriberInitExt,
 };

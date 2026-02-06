@@ -17,7 +17,7 @@
           v-model:value="settingStore.themeGlobalColor"
           class="set"
           :round="false"
-          :disabled="isImageMode"
+          :disabled="isCustomBackground"
           @update:value="themeGlobalColorChange"
         />
       </n-card>
@@ -28,7 +28,7 @@
         </div>
         <n-switch
           v-model:value="settingStore.themeFollowCover"
-          :disabled="isEmpty(statusStore.songCoverTheme) || isImageMode"
+          :disabled="isEmpty(statusStore.songCoverTheme) || isCustomBackground"
           class="set"
           :round="false"
         />
@@ -47,15 +47,15 @@
           @update:value="themeGlobalColorChange(true)"
         />
       </n-card>
-      <!-- 自定义背景图 -->
+      <!-- 自定义背景 -->
       <n-card class="set-item">
         <div class="label">
-          <n-text class="name">自定义背景图</n-text>
-          <n-text class="tip" :depth="3">实验性功能，请选择 10MB 以下图片</n-text>
+          <n-text class="name">自定义背景</n-text>
+          <n-text class="tip" :depth="3">支持图片或视频（50MB以内）</n-text>
         </div>
         <div class="bg-actions">
           <n-button
-            v-if="isImageMode"
+            v-if="isCustomBackground"
             size="small"
             type="error"
             strong
@@ -65,13 +65,13 @@
             取消
           </n-button>
           <n-button size="small" type="primary" strong secondary @click="selectBackgroundImage">
-            {{ isImageMode ? "更换" : "选择图片" }}
+            {{ isCustomBackground ? "更换" : "选择文件" }}
           </n-button>
         </div>
         <input
           ref="fileInputRef"
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           style="display: none"
           @change="handleFileSelect"
         />
@@ -79,7 +79,7 @@
     </div>
     <!-- 颜色模式：选择主题色 -->
     <div
-      v-if="!isImageMode"
+      v-if="!isCustomBackground"
       class="color-section"
       :class="{ disabled: settingStore.themeFollowCover }"
     >
@@ -134,7 +134,7 @@
         </div>
       </div>
     </div>
-    <!-- 图片模式：背景图配置 -->
+    <!-- 自定义背景模式：背景配置 -->
     <div v-else class="config-section">
       <n-card class="set-item">
         <div class="label">
@@ -179,8 +179,8 @@
         />
       </n-card>
     </div>
-    <!-- 图片模式：选择主题色 -->
-    <div v-if="isImageMode" class="color-section">
+    <!-- 自定义背景模式：选择主题色 -->
+    <div v-if="isCustomBackground" class="color-section">
       <n-text class="section-title" :depth="2">选择主题色</n-text>
       <div class="color-grid">
         <!-- 自动提取的颜色 -->
@@ -278,8 +278,8 @@ const blobURLManager = useBlobURLManager();
 // 文件输入引用
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
-// 是否为图片模式
-const isImageMode = computed(() => statusStore.themeBackgroundMode === "image");
+// 是否为自定义背景模式
+const isCustomBackground = computed(() => statusStore.isCustomBackground);
 
 // 主题颜色变体选项
 const variantOptions = [
@@ -314,16 +314,18 @@ const handleFileSelect = async (event: Event) => {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
-  // 检查文件大小（限制 10MB）
-  const maxSize = 10 * 1024 * 1024;
+  // 检查文件大小（限制 50MB）
+  const maxSize = 50 * 1024 * 1024;
   if (file.size > maxSize) {
-    window.$message.error("图片大小不能超过 10MB");
+    window.$message.error("文件大小不能超过 50MB");
     input.value = "";
     return;
   }
   // 检查文件类型
-  if (!file.type.startsWith("image/")) {
-    window.$message.error("请选择图片文件");
+  const isVideo = file.type.startsWith("video/");
+  const isImage = file.type.startsWith("image/");
+  if (!isImage && !isVideo) {
+    window.$message.error("请选择图片或视频文件");
     input.value = "";
     return;
   }
@@ -333,28 +335,34 @@ const handleFileSelect = async (event: Event) => {
     const arrayBuffer = await file.arrayBuffer();
     // 强制清理旧的 URL，确保生成新的
     blobURLManager.revokeBlobURL("background-image");
-    const imageUrl = blobURLManager.createBlobURL(arrayBuffer, file.type, "background-image");
-    // 提取图片主色
-    const image = new Image();
-    image.src = imageUrl;
-    await new Promise((resolve) => (image.onload = resolve));
-    const colorData = getCoverColorData(image);
-    image.remove();
-    // 保存提取的主色
-    if (colorData?.main) {
-      const { r, g, b } = colorData.main;
-      const hex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-      statusStore.backgroundConfig.themeColor = hex;
+    const url = blobURLManager.createBlobURL(arrayBuffer, file.type, "background-image");
+
+    if (isImage) {
+      // 提取图片主色
+      const image = new Image();
+      image.src = url;
+      await new Promise((resolve) => (image.onload = resolve));
+      const colorData = getCoverColorData(image);
+      image.remove();
+      // 保存提取的主色
+      if (colorData?.main) {
+        const { r, g, b } = colorData.main;
+        const hex = `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+        statusStore.backgroundConfig.themeColor = hex;
+      }
+      statusStore.themeBackgroundMode = "image";
+    } else {
+      statusStore.themeBackgroundMode = "video";
     }
-    // 切换到图片模式
-    statusStore.backgroundImageUrl = imageUrl;
-    statusStore.themeBackgroundMode = "image";
+
+    // 切换模式
+    statusStore.backgroundImageUrl = url;
     settingStore.themeFollowCover = false;
     settingStore.themeGlobalColor = true;
-    window.$message.success("背景图设置成功");
+    window.$message.success("背景设置成功");
   } catch (error) {
-    console.error("Error setting background image:", error);
-    window.$message.error("背景图设置失败");
+    console.error("Error setting background:", error);
+    window.$message.error("背景设置失败");
   }
   input.value = "";
 };

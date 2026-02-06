@@ -113,35 +113,45 @@
               E
             </n-tag>
             <!-- 歌手 -->
-            <div v-if="Array.isArray(song.artists)" class="artists">
-              <n-text
-                v-for="ar in song.artists"
-                :key="ar.id"
-                class="ar"
-                @click="openJumpArtist(song.artists, ar.id)"
-              >
-                {{
-                  settingStore.hideBracketedContent ? removeBrackets(ar.name) : ar.name
-                }}
-              </n-text>
-            </div>
-            <div v-else-if="song.type === 'radio'" class="artists">
-              <n-text class="ar"> 电台节目 </n-text>
-            </div>
-            <div v-else class="artists" @click="openJumpArtist(song.artists)">
-              <n-text class="ar">
-                {{
-                  settingStore.hideBracketedContent
-                    ? removeBrackets(song.artists)
-                    : song.artists || "未知艺术家"
-                }}
-              </n-text>
-            </div>
+            <template v-if="settingStore.showSongArtist">
+              <div v-if="Array.isArray(song.artists)" class="artists">
+                <n-text
+                  v-for="ar in song.artists"
+                  :key="ar.id"
+                  class="ar"
+                  @click="openJumpArtist(song.artists, ar.id)"
+                >
+                  {{
+                    settingStore.hideBracketedContent ? removeBrackets(ar.name) : ar.name
+                  }}
+                </n-text>
+              </div>
+              <div v-else-if="song.type === 'radio'" class="artists">
+                <n-text class="ar"> 电台节目 </n-text>
+              </div>
+              <div v-else class="artists" @click="openJumpArtist(song.artists)">
+                <n-text class="ar">
+                  {{
+                    settingStore.hideBracketedContent
+                      ? removeBrackets(song.artists)
+                      : song.artists || "未知艺术家"
+                  }}
+                </n-text>
+              </div>
+            </template>
           </n-flex>
         </n-flex>
       </div>
       <!-- 专辑 -->
-      <div v-if="song.type !== 'radio' && !hiddenAlbum && !isSmallScreen" class="album text-hidden">
+      <div
+        v-if="
+          song.type !== 'radio' &&
+          !hiddenAlbum &&
+          !isSmallScreen &&
+          settingStore.showSongAlbum
+        "
+        class="album text-hidden"
+      >
         <n-text
           v-if="isObject(song.album)"
           class="album-text"
@@ -159,7 +169,12 @@
         </n-text>
       </div>
       <!-- 操作 -->
-      <div v-if="song.type !== 'radio'" class="actions" @click.stop @dblclick.stop>
+      <div
+        v-if="song.type !== 'radio' && settingStore.showSongOperations"
+        class="actions"
+        @click.stop
+        @dblclick.stop
+      >
         <!-- 喜欢歌曲 -->
         <SvgIcon
           v-if="!isSmallScreen"
@@ -180,7 +195,13 @@
         {{ formatNumber(song.playCount || 0) }}
       </n-text>
       <!-- 时长 -->
-      <n-text v-if="!isSmallScreen" class="meta" depth="3">{{ msToTime(song.duration) }}</n-text>
+      <n-text
+        v-if="!isSmallScreen && settingStore.showSongDuration"
+        class="meta"
+        depth="3"
+      >
+        {{ msToTime(song.duration) }}
+      </n-text>
       <!-- 大小 -->
       <n-text v-if="song.size && !hiddenSize && !isSmallScreen" class="meta size" depth="3">
         {{ song.size }}M

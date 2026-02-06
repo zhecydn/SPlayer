@@ -8,7 +8,7 @@ import { AI_AUDIO_LEVELS } from "@/utils/meta";
 import { openSongUnlockManager } from "@/utils/modal";
 import { NTooltip, SelectOption } from "naive-ui";
 import { uniqBy } from "lodash-es";
-import { filterAuthorizedQualityOptions } from "@/utils/auth";
+
 import { computed, ref, h, watch } from "vue";
 
 export const usePlaySettings = (): SettingConfig => {
@@ -274,10 +274,7 @@ export const usePlaySettings = (): SettingConfig => {
 
   // 动态计算音质选项
   const songLevelOptions = computed(() => {
-    let options = Object.values(songLevelData);
-
-    // 根据 VIP 状态过滤
-    options = filterAuthorizedQualityOptions(options, "value");
+    const options = Object.values(songLevelData);
 
     if (settingStore.disableAiAudio) {
       return options.filter((option) => {
@@ -487,7 +484,7 @@ export const usePlaySettings = (): SettingConfig => {
               return () => {
                 if (settingStore.audioEngine === "ffmpeg") return "FFmpeg 引擎不支持切换输出设备";
                 if (settingStore.playbackEngine === "mpv")
-                  return '如不知怎么选择，请选择"Autoselect"或者"Default"设备，选错可能导致无声，或处于锁死状态，重新选择"Autoselect"后切歌即可解决';
+                  return '如不知怎么选择，请选择 "Autoselect" 或者 "Default" 设备，选错可能导致无声，或处于锁死状态，重新选择 "Autoselect" 后切歌即可解决';
                 return "新增或移除音频设备后请重新打开设置";
               };
             })(),
@@ -507,7 +504,8 @@ export const usePlaySettings = (): SettingConfig => {
             key: "enableReplayGain",
             label: "音量平衡",
             type: "switch",
-            description: "平衡不同音频内容之间的音量大小（需要本地歌曲标签中有 replayGain 数据才会生效）",
+            description:
+              "平衡不同音频内容之间的音量大小（需要本地歌曲标签中有 replayGain 数据才会生效）",
             value: computed({
               get: () => settingStore.enableReplayGain,
               set: (v) => (settingStore.enableReplayGain = v),

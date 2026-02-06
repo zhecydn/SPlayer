@@ -60,7 +60,7 @@ let lastThemeCacheKey: string | null = null;
 // 获取明暗模式
 const theme = computed(() => {
   // 图片模式强制深色
-  if (statusStore.themeBackgroundMode === "image") return darkTheme;
+  if (statusStore.isCustomBackground) return darkTheme;
   return settingStore.themeMode === "auto"
     ? // 跟随系统
       osTheme.value === "dark"
@@ -76,7 +76,7 @@ const theme = computed(() => {
 const getThemeMainColor = () => {
   const themeType = theme.value ? "dark" : "light";
   // 背景图模式
-  if (statusStore.themeBackgroundMode === "image") {
+  if (statusStore.isCustomBackground) {
     const { themeColor, useCustomColor, customColor, isSolid } = statusStore.backgroundConfig;
     // 纯色覆盖
     if (isSolid) return setColorSchemes(MONOTONOUS_THEME, themeType);
@@ -165,6 +165,7 @@ const changeGlobalTheme = () => {
       },
       Tooltip: {
         color: colors.surface,
+        textColor: colors.primary,
       },
       Tabs: {
         colorSegment: colors.surface,
@@ -281,7 +282,7 @@ const NaiveProviderContent = defineComponent({
 
 // 应用背景模式类名
 const applyThemeBackgroundMode = () => {
-  if (statusStore.themeBackgroundMode === "image") {
+  if (statusStore.isCustomBackground) {
     document.documentElement.classList.add("image");
   } else {
     document.documentElement.classList.remove("image");

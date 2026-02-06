@@ -3,14 +3,32 @@
     <!-- 背景图 -->
     <Transition name="fade">
       <div
-        v-if="statusStore.themeBackgroundMode === 'image' && statusStore.backgroundImageUrl"
+        v-if="
+          (statusStore.themeBackgroundMode === 'image' ||
+            statusStore.themeBackgroundMode === 'video') &&
+          statusStore.backgroundImageUrl
+        "
         :key="statusStore.backgroundImageUrl"
         class="background-container"
       >
         <div
+          v-if="statusStore.themeBackgroundMode === 'image'"
           class="background-image"
           :style="{
             backgroundImage: `url(${statusStore.backgroundImageUrl})`,
+            transform: `scale(${statusStore.backgroundConfig.scale})`,
+            filter: `blur(${statusStore.backgroundConfig.blur}px)`,
+          }"
+        />
+        <video
+          v-else-if="statusStore.themeBackgroundMode === 'video'"
+          class="background-image"
+          :src="statusStore.backgroundImageUrl"
+          autoplay
+          loop
+          muted
+          :style="{
+            objectFit: 'cover',
             transform: `scale(${statusStore.backgroundConfig.scale})`,
             filter: `blur(${statusStore.backgroundConfig.blur}px)`,
           }"
@@ -108,7 +126,7 @@ import { useMusicStore, useStatusStore, useSettingStore, useDataStore } from "@/
 import { useBlobURLManager } from "@/core/resource/BlobURLManager";
 import { isElectron } from "@/utils/env";
 import { useMobile } from "@/composables/useMobile";
-import init from "@/utils/init";
+import { useInit } from "@/composables/useInit";
 
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
@@ -128,7 +146,7 @@ const { height: contentHeight } = useElementSize(contentRef);
 // 加载背景图
 const loadBackgroundImage = async () => {
   if (statusStore.backgroundImageUrl) return;
-  if (statusStore.themeBackgroundMode === "image") {
+  if (statusStore.themeBackgroundMode === "image" || statusStore.themeBackgroundMode === "video") {
     const blob = await dataStore.getBackgroundImage();
     if (blob) {
       const arrayBuffer = await blob.arrayBuffer();
@@ -145,9 +163,11 @@ watchEffect(() => {
   statusStore.mainContentHeight = contentHeight.value;
 });
 
+// 初始化
+useInit();
+
 onMounted(() => {
   loadBackgroundImage();
-  init();
   if (!isElectron) {
     window.addEventListener("beforeunload", (event) => {
       event.preventDefault();

@@ -19,6 +19,7 @@
       {
         pure: statusStore.pureLyricMode,
         'align-right': settingStore.lyricAlignRight,
+        'meta-show': statusStore.playerMetaShow,
       },
     ]"
     @mouseleave="lrcAllLeave"
@@ -131,7 +132,7 @@ import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { usePlayerController } from "@/core/player/PlayerController";
 import { getLyricLanguage } from "@/utils/format";
 import { isElectron } from "@/utils/env";
-import { lyricLangFontStyle } from "@/utils/lyricFontConfig";
+import { lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 
 const props = defineProps({
   currentTime: {
@@ -794,14 +795,14 @@ onBeforeUnmount(() => {
       pointer-events: none;
     }
     @media (hover: hover) and (pointer: fine) {
-      &:hover {
+      .lyric.meta-show &:hover {
         opacity: 1;
         &::before {
           transform: scale(1);
           opacity: 1;
         }
       }
-      &:active {
+      .lyric.meta-show &:active {
         &::before {
           transform: scale(0.95);
         }
@@ -876,7 +877,7 @@ onBeforeUnmount(() => {
       }
     }
   }
-  &:hover {
+  &.meta-show:hover {
     .lrc-line {
       filter: blur(0) !important;
     }

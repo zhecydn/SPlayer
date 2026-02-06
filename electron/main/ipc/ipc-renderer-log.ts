@@ -1,5 +1,6 @@
 // 渲染进程日志 IPC 处理
-import { ipcMain } from "electron";
+import { ipcMain, shell } from "electron";
+import log from "electron-log";
 import { rendererLog } from "../logger";
 
 type LogLevel = "info" | "warn" | "error" | "debug";
@@ -17,6 +18,12 @@ const initRendererLogIpc = (): void => {
         logMethod(message);
       }
     }
+  });
+
+  ipcMain.on("open-log-file", () => {
+    const logFile = log.transports.file.getFile().path;
+    shell.showItemInFolder(logFile);
+    rendererLog.info("📂 Opened log directory:", logFile);
   });
 };
 

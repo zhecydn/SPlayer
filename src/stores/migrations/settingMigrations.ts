@@ -6,7 +6,7 @@ import type { SettingState } from "../setting";
 /**
  * 当前设置 Schema 版本号
  */
-export const CURRENT_SETTING_SCHEMA_VERSION = 8;
+export const CURRENT_SETTING_SCHEMA_VERSION = 9;
 
 /**
  * 迁移函数类型
@@ -138,7 +138,7 @@ export const settingMigrations: Record<number, MigrationFunction> = {
 
     const currentMode = oldRpc.displayMode;
 
-    if (Object.prototype.hasOwnProperty.call(modeMap, currentMode)) {
+    if (Object.hasOwn(modeMap, currentMode)) {
       return {
         discordRpc: {
           enabled: oldRpc.enabled,
@@ -165,6 +165,18 @@ export const settingMigrations: Record<number, MigrationFunction> = {
       enableExcludeLyricsLocal: oldState.enableExcludeLocalLyrics,
       excludeLyricsUserKeywords: oldState.excludeUserKeywords,
       excludeLyricsUserRegexes: oldState.excludeUserRegexes,
+    };
+  },
+  9: (state) => {
+    interface OldSettingState extends Partial<SettingState> {
+      preferQQMusicLyric?: boolean;
+    }
+    const oldState = state as OldSettingState;
+    const preferQM = oldState.preferQQMusicLyric ?? false;
+
+    return {
+      enableQQMusicLyric: preferQM,
+      lyricPriority: preferQM ? "qm" : "auto",
     };
   },
 };

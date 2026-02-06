@@ -161,15 +161,15 @@
 </template>
 
 <script setup lang="ts">
-import type { SongType } from "@/types/main";
-import type { DropdownOption, MessageReactive } from "naive-ui";
-import { useLocalStore, useSettingStore } from "@/stores";
 import { useMobile } from "@/composables/useMobile";
-import { formatSongsList } from "@/utils/format";
-import { debounce } from "lodash-es";
-import { fuzzySearch, renderIcon } from "@/utils/helper";
-import { openLocalMusicDirectoryModal, openBatchList, openCreatePlaylist } from "@/utils/modal";
 import { usePlayerController } from "@/core/player/PlayerController";
+import { useLocalStore, useSettingStore } from "@/stores";
+import type { SongType } from "@/types/main";
+import { formatSongsList } from "@/utils/format";
+import { fuzzySearch, renderIcon } from "@/utils/helper";
+import { openBatchList, openCreatePlaylist, openLocalMusicDirectoryModal } from "@/utils/modal";
+import { debounce } from "lodash-es";
+import type { DropdownOption, MessageReactive } from "naive-ui";
 
 const router = useRouter();
 const localStore = useLocalStore();
@@ -370,6 +370,7 @@ interface MusicTrackData {
 interface SyncCompleteData {
   success: boolean;
   message?: string;
+  tracks?: MusicTrackData[];
 }
 
 // 获取全部路径歌曲（流式接收）
@@ -426,7 +427,8 @@ const getAllLocalMusic = debounce(
         window.electron.ipcRenderer.removeAllListeners("music-sync-complete");
         return;
       }
-      const adaptedDataList = receivedTracks.map((track) => {
+      const sourceTracks = data.tracks && data.tracks.length > 0 ? data.tracks : receivedTracks;
+      const adaptedDataList = sourceTracks.map((track) => {
         // 将字节转换为 MB，保留两位小数
         const sizeMB =
           track.size && track.size > 0 ? Number((track.size / (1024 * 1024)).toFixed(2)) : 0;

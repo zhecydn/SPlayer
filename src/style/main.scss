@@ -66,6 +66,11 @@
       }
     }
   }
+
+  // 特殊组件
+  .n-popselect-menu {
+    backdrop-filter: blur(10px);
+  }
 }
 
 body {

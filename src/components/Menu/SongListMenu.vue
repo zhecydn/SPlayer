@@ -20,6 +20,7 @@ import { getPlayerInfoObj } from "@/utils/format";
 import SImage from "../UI/s-image.vue";
 import { useSongMenu } from "@/composables/useSongMenu";
 
+const props = defineProps<{ hiddenCover?: boolean }>();
 const emit = defineEmits<{ removeSong: [index: number[]] }>();
 
 const { getMenuOptions } = useSongMenu();
@@ -63,25 +64,33 @@ const openDropdown = (
             align: "center",
             wrap: false,
             class: "song-list-card",
+            justify: props.hiddenCover ? "center" : undefined,
           },
           {
-            default: () => [
-              h(SImage, { src: song.coverSize?.s }),
-              h(
-                NFlex,
-                { vertical: true, size: 0 },
-                {
-                  default: () => [
-                    h(NText, { class: "text-hidden", depth: 1 }, { default: () => songData?.name }),
-                    h(
-                      NText,
-                      { depth: 3, class: "text-hidden", style: { fontSize: "12px" } },
-                      { default: () => songData?.artist },
-                    ),
-                  ],
-                },
-              ),
-            ],
+            default: () => {
+              const list = [
+                h(
+                  NFlex,
+                  {
+                    vertical: true,
+                    size: 0,
+                    align: props.hiddenCover ? "center" : undefined,
+                  },
+                  {
+                    default: () => [
+                      h(NText, { class: "text-hidden", depth: 1 }, { default: () => songData?.name }),
+                      h(
+                        NText,
+                        { depth: 3, class: "text-hidden", style: { fontSize: "12px" } },
+                        { default: () => songData?.artist },
+                      ),
+                    ],
+                  },
+                ),
+              ];
+              if (!props.hiddenCover) list.unshift(h(SImage, { src: song.coverSize?.s }));
+              return list;
+            },
           },
         ),
     };

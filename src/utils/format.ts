@@ -57,19 +57,19 @@ export const formatSongsList = (data: any[]): SongType[] => {
         typeof item.album === "string"
           ? item.album
           : {
-              id: (item.album || item.al)?.id,
-              name: (item.album || item.al)?.name,
-              cover: (item.album || item.al)?.picUrl,
-            },
+            id: (item.album || item.al)?.id,
+            name: (item.album || item.al)?.name,
+            cover: (item.album || item.al)?.picUrl,
+          },
       alia: isArray(item.alia || item.alias || item.transNames || item.tns)
         ? item.alia?.[0] || item.alias?.[0] || item.transNames?.[0] || item.tns?.[0]
         : item.alia,
       dj: item.dj
         ? {
-            id: item.mainTrackId || item.id,
-            name: item.dj?.brand,
-            creator: item.dj?.nickname,
-          }
+          id: item.mainTrackId || item.id,
+          name: item.dj?.brand,
+          creator: item.dj?.nickname,
+        }
         : undefined,
       ...getCoverUrl(item),
       duration: Number(item.duration || item.dt || 0),
@@ -187,13 +187,13 @@ export const formatCommentList = (data: any[]): CommentType[] => {
     beReplied:
       item.beReplied?.length > 0
         ? {
-            content: item.beReplied[0]?.content,
-            user: {
-              id: item.beReplied[0]?.user.userId,
-              name: item.beReplied[0]?.user.nickname,
-              avatarUrl: item.beReplied[0]?.user.avatarUrl,
-            },
-          }
+          content: item.beReplied[0]?.content,
+          user: {
+            id: item.beReplied[0]?.user.userId,
+            name: item.beReplied[0]?.user.nickname,
+            avatarUrl: item.beReplied[0]?.user.avatarUrl,
+          },
+        }
         : undefined,
     time: item.time,
     likedCount: item.likedCount,
@@ -209,9 +209,9 @@ export const formatCommentList = (data: any[]): CommentType[] => {
     },
     ip: item?.ip
       ? {
-          ip: item.ip,
-          location: item.location,
-        }
+        ip: item.ip,
+        location: item.location,
+      }
       : undefined,
   }));
 };
@@ -365,4 +365,42 @@ export const getPlayerInfo = (song?: SongType, sep: string = "/"): string | null
   const info = getPlayerInfoObj(song, sep);
   if (!info) return null;
   return `${info.name} - ${info.artist}`;
+};
+
+/**
+ * 检测所有输入行的共同最小缩进，将其从每一行中删除，如果第一行和最后一行是空白行，也将其删除
+ * @param string 字符串
+ * @param lineSplit 分割时的换行符
+ * @param lineJoin 连接时的换行符
+ * @returns 去除缩进后的字符串
+ */
+export const trimIndentString = (
+  string: string,
+  lineSplit: string = "\n",
+  lineJoin: string = lineSplit,
+): string => {
+  if (!string) return "";
+  const lines = string.split(lineSplit);
+  // 删除第一行和最后一行的空白行
+  const relevantLines = lines.filter(
+    (line, index) => (index !== 0 && index !== lines.length - 1) || line.trim() !== "",
+  );
+  // 移除每行的最小缩进
+  const minIndent = relevantLines
+    .filter((line) => line.trim() !== "")
+    .map((line) => line.match(/^\s*/)?.[0].length ?? 0)
+    .reduce((min, indent) => Math.min(min, indent), Infinity);
+  const trimmedLines = relevantLines.map((line) => line.slice(minIndent));
+  return trimmedLines.join(lineJoin);
+};
+
+/**
+ * 设置中多行描述的模板标签功能
+ * 删除最小公共缩进并将换行符转换为 HTML <br> 标记
+ *
+ * @see trimIndentString
+ */
+export const descMultiline = (strings: TemplateStringsArray, ...values: any[]): string => {
+  const fullString = String.raw(strings, ...values);
+  return trimIndentString(fullString, "\n", "<br>");
 };

@@ -5,14 +5,35 @@
     <DefaultLyric v-else :currentTime="playSeek" />
     <!-- 歌词菜单 -->
     <n-flex :class="['lyric-menu', { show: statusStore.playerMetaShow }]" justify="center" vertical>
-      <div class="menu-icon" @click="openCopyLyrics">
+      <div
+        v-if="settingStore.fullscreenPlayerElements.copyLyric"
+        class="menu-icon"
+        @click="openCopyLyrics"
+      >
         <SvgIcon name="Copy" />
       </div>
-      <div class="divider" />
-      <div class="menu-icon" @click="changeOffset(-settingStore.lyricOffsetStep)">
+      <div
+        v-if="
+          settingStore.fullscreenPlayerElements.copyLyric &&
+          (settingStore.fullscreenPlayerElements.lyricOffset ||
+            settingStore.fullscreenPlayerElements.lyricSettings)
+        "
+        class="divider"
+      />
+      <div
+        v-if="settingStore.fullscreenPlayerElements.lyricOffset"
+        class="menu-icon"
+        @click="changeOffset(-settingStore.lyricOffsetStep)"
+      >
         <SvgIcon name="Replay5" />
       </div>
-      <n-popover class="player" trigger="click" placement="left" style="padding: 8px">
+      <n-popover
+        v-if="settingStore.fullscreenPlayerElements.lyricOffset"
+        class="player"
+        trigger="click"
+        placement="left"
+        style="padding: 8px"
+      >
         <template #trigger>
           <span class="time">
             {{ currentTimeOffsetValue }}
@@ -43,11 +64,25 @@
           </n-button>
         </n-flex>
       </n-popover>
-      <div class="menu-icon" @click="changeOffset(settingStore.lyricOffsetStep)">
+      <div
+        v-if="settingStore.fullscreenPlayerElements.lyricOffset"
+        class="menu-icon"
+        @click="changeOffset(settingStore.lyricOffsetStep)"
+      >
         <SvgIcon name="Forward5" />
       </div>
-      <div class="divider" />
-      <div class="menu-icon" @click="openSetting('lyrics')">
+      <div
+        v-if="
+          settingStore.fullscreenPlayerElements.lyricOffset &&
+          settingStore.fullscreenPlayerElements.lyricSettings
+        "
+        class="divider"
+      />
+      <div
+        v-if="settingStore.fullscreenPlayerElements.lyricSettings"
+        class="menu-icon"
+        @click="openSetting('lyrics')"
+      >
         <SvgIcon name="Settings" />
       </div>
     </n-flex>

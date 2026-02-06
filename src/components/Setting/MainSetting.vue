@@ -328,7 +328,7 @@ const menuOptions: MenuOption[] = [
   },
   {
     key: "about",
-    label: "关于",
+    label: "关于与鸣谢",
     icon: renderIcon("Info"),
   },
 ];

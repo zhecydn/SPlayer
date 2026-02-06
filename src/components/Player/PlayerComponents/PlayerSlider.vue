@@ -66,6 +66,25 @@ const endDrag = () => {
 };
 
 /**
+ * 二分查找当前时间对应的歌词索引
+ */
+const getLyricIndex = (lyric: LyricLine[], value: number) => {
+  let low = 0;
+  let high = lyric.length - 1;
+  let idx = -1;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (lyric[mid].startTime <= value) {
+      idx = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return idx;
+};
+
+/**
  * 获取当前时间最近一句歌词
  * @param value 当前时间
  * @returns 最近一句歌词的开始时间和内容
@@ -73,14 +92,9 @@ const endDrag = () => {
 const getCurrentLyric = (value: number) => {
   const lyric = toRaw(musicStore.songLyric.lrcData);
   if (!lyric?.length) return null;
-  //  查找最近一句歌词
-  let nearestLyric: LyricLine | null = null;
-  for (let i = lyric.length - 1; i >= 0; i--) {
-    if (value >= lyric[i].startTime) {
-      nearestLyric = lyric[i];
-      break;
-    }
-  }
+  const idx = getLyricIndex(lyric, value);
+  const nearestLyric = idx !== -1 ? lyric[idx] : null;
+
   return {
     time: nearestLyric?.startTime,
     text: nearestLyric?.words?.[0]?.word || "",
@@ -89,10 +103,33 @@ const getCurrentLyric = (value: number) => {
 
 // 调节进度
 const setSeek = (value: number) => {
+  // 歌词吸附
   if (settingStore.progressAdjustLyric) {
-    const nearestLyric = getCurrentLyric(value);
-    player.setSeek(nearestLyric?.time ?? value);
-    return;
+    const lyric = toRaw(musicStore.songLyric.lrcData);
+    if (lyric?.length) {
+      const currentLineIdx = getLyricIndex(lyric, value);
+
+      // 优先检查下一行（预备开始）
+      // 无论当前是否有行，只要下一行够近，就吸附到下一行
+      const nextLineIdx = currentLineIdx + 1;
+      if (nextLineIdx < lyric.length) {
+        const nextLine = lyric[nextLineIdx];
+        if (nextLine.startTime - value <= 2500) {
+          player.setSeek(nextLine.startTime);
+          return;
+        }
+      }
+      // 查当前行（重新开始）
+      // 解决纯音乐被拉回的问题：如果距离当前行开头太远（>10s），则视为 Instrumental 或 Gap，不吸附
+      if (currentLineIdx !== -1) {
+        const currentLine = lyric[currentLineIdx];
+        const offset = value - currentLine.startTime;
+        if (offset <= 10000) {
+          player.setSeek(currentLine.startTime);
+          return;
+        }
+      }
+    }
   }
   player.setSeek(value);
 };

@@ -50,6 +50,7 @@ const coverItems: CoverItem[] = [
   { key: "list", name: "歌单详情/歌曲列表" },
   { key: "artistDetail", name: "歌手详情" },
   { key: "radio", name: "播客电台" },
+  { key: "album", name: "专辑" },
   { key: "like", name: "我的收藏" },
   { key: "video", name: "视频" },
   { key: "videoDetail", name: "视频详情页" },

@@ -1,9 +1,7 @@
 import { useDataStore, useMusicStore, useSettingStore } from "@/stores";
 import { usePlayerController } from "@/core/player/PlayerController";
 import { isElectron } from "@/utils/env";
-import {
-  openExcludeComment,
-} from "@/utils/modal";
+import { openExcludeComment } from "@/utils/modal";
 import { sendRegisterProtocol } from "@/utils/protocol";
 import { SettingConfig } from "@/types/settings";
 import { ref, computed, h } from "vue";
@@ -83,14 +81,19 @@ export const useGeneralSettings = (): SettingConfig => {
       const rendererData = {
         "setting-store": localStorage.getItem("setting-store"),
         "shortcut-store": localStorage.getItem("shortcut-store"),
+        // "status-store": localStorage.getItem("status-store"),
+        // "music-store": localStorage.getItem("music-store"),
       };
       const result = await window.api.store.export(rendererData);
-      if (result) {
-        window.$message.success("设置导出成功");
+      if (result && result.success) {
+        window.$message.success(`设置导出成功: ${result.path}`);
       } else {
-        window.$message.error("设置导出失败");
+        const errorMsg = result?.error === "cancelled" ? "已取消导出" : "设置导出失败";
+        if (result?.error !== "cancelled") {
+          window.$message.error(errorMsg);
+        }
       }
-    } catch (error) {
+    } catch {
       window.$message.error("设置导出出错");
     }
   };
@@ -103,31 +106,53 @@ export const useGeneralSettings = (): SettingConfig => {
           h(
             NAlert,
             { type: "warning", showIcon: true, style: { marginBottom: "12px" } },
-            { default: () => "目前备份数据功能属于测试阶段，不保证可用性" },
+            {
+              default: () =>
+                "导入设置将覆盖当前所有配置（包括主题、快捷键、音效设置等）并重启软件。",
+            },
           ),
-          h("div", null, "导入设置将覆盖当前所有配置并重启软件，是否继续？"),
+          h("div", null, "是否继续？"),
         ]),
       positiveText: "确定",
       negativeText: "取消",
       onPositiveClick: async () => {
         try {
-          const data = await window.api.store.import();
-          if (data) {
+          const result = await window.api.store.import();
+          if (result && result.success) {
+            const data = result.data;
+            let restoredCount = 0;
             if (data.renderer) {
-              if (data.renderer["setting-store"])
-                localStorage.setItem("setting-store", data.renderer["setting-store"]);
-              if (data.renderer["shortcut-store"])
-                localStorage.setItem("shortcut-store", data.renderer["shortcut-store"]);
+              const storesToRestore = [
+                "setting-store",
+                "shortcut-store",
+                // "status-store",
+                // "music-store",
+              ];
+
+              storesToRestore.forEach((key) => {
+                if (data.renderer[key]) {
+                  localStorage.setItem(key, data.renderer[key]);
+                  restoredCount++;
+                }
+              });
             }
-            window.$message.success("设置导入成功，即将重启");
-            setTimeout(() => {
-              window.location.reload();
-            }, 1000);
+
+            if (restoredCount > 0 || data.electron) {
+              window.$message.success("设置导入成功，即将重启");
+              setTimeout(() => {
+                window.location.reload();
+              }, 1000);
+            } else {
+              window.$message.warning("未找到可恢复的设置数据");
+            }
           } else {
-            window.$message.error("设置导入失败或已取消");
+            if (result?.error !== "cancelled") {
+              window.$message.error("设置导入失败: " + (result?.error || "未知错误"));
+            }
           }
         } catch (error) {
           window.$message.error("设置导入出错");
+          console.error(error);
         }
       },
     });

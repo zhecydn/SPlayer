@@ -1,7 +1,5 @@
 import { getCookie, removeCookie, setCookies } from "./cookie";
 import type { UserLikeDataType, CoverType, ArtistType, SongType } from "@/types/main";
-import { AUTHORIZED_QUALITY_LEVELS, VIP_LEVELS } from "@/utils/meta";
-
 import {
   userAccount,
   userDetail,
@@ -12,11 +10,10 @@ import {
   userArtist,
   userAlbum,
   userPlaylist,
-  userVipInfo,
 } from "@/api/user";
 import { likeSong } from "@/api/song";
 import { formatCoverList, formatArtistsList, formatSongsList } from "@/utils/format";
-import { useDataStore, useMusicStore } from "@/stores";
+import { useDataStore, useMusicStore, useLocalStore } from "@/stores";
 import { logout, refreshLogin } from "@/api/login";
 import { debounce, isFunction, type DebouncedFunc } from "lodash-es";
 import { isBeforeSixAM } from "./time";
@@ -39,70 +36,6 @@ export const isLogin = (): 0 | 1 | 2 => {
   return getCookie("MUSIC_U") ? 1 : 0;
 };
 
-/** 检查是否为 SVIP */
-export const isSvip = (vipType: number) => {
-  // 11 is standard SVIP code
-  if (vipType === VIP_LEVELS.SVIP) return true;
-  // Check enriched data from store
-  const dataStore = useDataStore();
-  return !!dataStore.userData.isSvip;
-};
-
-/** 检查是否为 VIP (包括 SVIP) */
-export const isVip = (vipType: number) => {
-  const vipCodes: number[] = [VIP_LEVELS.VIP, VIP_LEVELS.VIP_ANNUAL];
-  return vipCodes.includes(vipType) || isSvip(vipType);
-};
-
-/**
- * 获取当前用户权限允许的音质列表
- * @param vipType VIP 类型
- * @param isLogin 是否登录
- * @returns 允许的音质列表 (null 表示无限制/全部允许)
- */
-export const getAuthorizedQualityLevels = (
-  vipType: number,
-  isLogin: boolean,
-): readonly string[] | null => {
-  if (!isLogin) {
-    return AUTHORIZED_QUALITY_LEVELS.NORMAL;
-  }
-  // SVIP 拥有所有权限
-  if (isSvip(vipType)) {
-    return null;
-  }
-  // VIP 权限
-  if (isVip(vipType)) {
-    return AUTHORIZED_QUALITY_LEVELS.VIP;
-  }
-  // 普通用户权限
-  return AUTHORIZED_QUALITY_LEVELS.NORMAL;
-};
-
-/**
- * 根据权限过滤音质选项
- * @param options 选项列表
- * @param key用于判断的属性名 (默认 'level')
- */
-export const filterAuthorizedQualityOptions = <T>(
-  options: T[],
-  key: keyof T = "level" as keyof T,
-): T[] => {
-  const dataStore = useDataStore();
-  const isLogin = dataStore.userLoginStatus;
-  const vipType = isLogin ? dataStore.userData.vipType || 0 : 0;
-
-  const allowedLevels = getAuthorizedQualityLevels(vipType, isLogin);
-
-  if (allowedLevels) {
-    return options.filter((item) => {
-      const level = item[key] as unknown as string;
-      return allowedLevels.includes(level);
-    });
-  }
-
-  return options;
-};
 // 退出登录
 export const toLogout = async (clearUserList = false): Promise<void> => {
   const dataStore = useDataStore();
@@ -285,28 +218,13 @@ export const updateUserData = async () => {
     // 获取用户订阅信息
     const subcountData = await userSubcount();
     // 获取用户 VIP 信息
-    let isSvip = false;
-    try {
-      const vipInfo = await userVipInfo();
-      // 判断 SVIP: 检查 redplus 权益是否过期
-      // SVIP 用户通常拥有有效的 redplus 权益
-      if (vipInfo.data) {
-        const { redplus, redPlus } = vipInfo.data;
-        const rights = redplus || redPlus;
-        if (rights && rights.expireTime > Date.now()) {
-          isSvip = true;
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch VIP info", e);
-    }
 
     // 更改用户信息
     dataStore.userData = {
       userId,
       userType: userData.userType,
       vipType: userData.vipType,
-      isSvip,
+
       name: userData.nickname,
       level: userData.level,
       avatarUrl: userData.avatarUrl,
@@ -600,14 +518,40 @@ export const updateDailySongsData = async (refresh = false) => {
  * @param pid 歌单id
  * @param ids 要删除的歌曲id
  */
-export const deleteSongs = async (pid: number, ids: number[], callback?: () => void) => {
+export const deleteSongs = async (
+  pid: number,
+  ids: number[],
+  options: { callback?: () => void; songName?: string } = {},
+) => {
+  const { callback, songName } = options;
   try {
     window.$dialog.warning({
       title: "删除歌曲",
-      content: ids?.length > 1 ? "确定删除这些选中的歌曲吗？" : "确定删除这个歌曲吗？",
+      content:
+        ids?.length > 1
+          ? "确定删除这些选中的歌曲吗？"
+          : songName
+            ? `确定删除歌曲 ${songName} 吗？`
+            : "确定删除这个歌曲吗？",
       positiveText: "删除",
       negativeText: "取消",
       onPositiveClick: async () => {
+        // 本地歌单
+        if (pid.toString().length === 16) {
+          const localStore = useLocalStore();
+          const success = await localStore.removeSongsFromLocalPlaylist(
+            pid,
+            ids.map((id) => id.toString()),
+          );
+          if (success) {
+            if (isFunction(callback)) callback();
+            window.$message.success("删除成功");
+          } else {
+            window.$message.error("删除失败");
+          }
+          return;
+        }
+        // 在线歌单
         const result = await playlistTracks(pid, ids, "del");
         if (result.status === 200) {
           if (result.body?.code !== 200) {
