@@ -487,8 +487,7 @@ export const openSidebarHideManager = async () => {
 
 /** 打开封面隐藏配置弹窗 */
 export const openCoverManager = async () => {
-  const { default: CoverManager } =
-    await import("@/components/Modal/Setting/CoverManager.vue");
+  const { default: CoverManager } = await import("@/components/Modal/Setting/CoverManager.vue");
   window.$modal.create({
     preset: "card",
     transformOrigin: "center",
@@ -528,6 +527,24 @@ export const openCopyLyrics = async () => {
     title: "复制歌词",
     content: () => {
       return h(CopyLyrics, {
+        onClose: () => modal.destroy(),
+      });
+    },
+  });
+};
+
+/** 打开歌曲详情复制弹窗 */
+export const openCopySongInfo = async (songId: number) => {
+  const { default: CopySongInfo } = await import("@/components/Modal/CopySongInfo.vue");
+  const modal = window.$modal.create({
+    preset: "card",
+    transformOrigin: "center",
+    autoFocus: false,
+    style: { width: "500px" },
+    title: "歌曲详情复制",
+    content: () => {
+      return h(CopySongInfo, {
+        songId,
         onClose: () => modal.destroy(),
       });
     },

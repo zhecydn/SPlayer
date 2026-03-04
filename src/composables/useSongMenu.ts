@@ -1,12 +1,19 @@
 import { DropdownOption } from "naive-ui";
 import { SongType } from "@/types/main";
-import { useStatusStore, useDataStore, useMusicStore, useSettingStore, useLocalStore } from "@/stores";
+import {
+  useStatusStore,
+  useDataStore,
+  useMusicStore,
+  useSettingStore,
+  useLocalStore,
+} from "@/stores";
 import { useDownloadManager } from "@/core/resource/DownloadManager";
 import { usePlayerController } from "@/core/player/PlayerController";
-import { renderIcon, copyData } from "@/utils/helper";
+import { renderIcon, copyData, getShareUrl } from "@/utils/helper";
 import { deleteCloudSong, importCloudSong } from "@/api/cloud";
 import {
   openCloudMatch,
+  openCopySongInfo,
   openDownloadSong,
   openPlaylistAdd,
   openSongInfoEditor,
@@ -176,10 +183,7 @@ export const useSongMenu = () => {
       {
         key: "play-next",
         label: "下一首播放",
-        show:
-          settingStore.contextMenuOptions.playNext &&
-          !isCurrent &&
-          !statusStore.personalFmMode,
+        show: settingStore.contextMenuOptions.playNext && !isCurrent && !statusStore.personalFmMode,
         props: {
           onClick: () => player.addNextSong(song, false),
         },
@@ -246,12 +250,20 @@ export const useSongMenu = () => {
             icon: renderIcon("Copy", { size: 18 }),
           },
           {
+            key: "copy-song-info",
+            label: "复制更多信息",
+            show: !isLocal && type === "song",
+            props: {
+              onClick: () => openCopySongInfo(song.id),
+            },
+            icon: renderIcon("FormatList", { size: 18 }),
+          },
+          {
             key: "share",
             label: `分享${type === "song" ? "歌曲" : "节目"}链接`,
             show: !isLocal && type !== "streaming",
             props: {
-              onClick: () =>
-                copyData(`https://music.163.com/#/${type}?id=${song.id}`, "已复制分享链接到剪切板"),
+              onClick: () => copyData(getShareUrl(type, song.id), "已复制分享链接到剪贴板"),
             },
             icon: renderIcon("Share", { size: 18 }),
           },
@@ -379,9 +391,7 @@ export const useSongMenu = () => {
         key: "retry-download",
         label: "重试下载",
         show:
-          settingStore.contextMenuOptions.download &&
-          statusStore.isDeveloperMode &&
-          isDownloading,
+          settingStore.contextMenuOptions.download && statusStore.isDeveloperMode && isDownloading,
         props: { onClick: () => downloadManager.retryDownload(song.id) },
         icon: renderIcon("Refresh"),
       },

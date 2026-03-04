@@ -64,19 +64,13 @@
             <n-text v-else class="title">标题</n-text>
             <n-text
               v-if="
-                type !== 'radio' &&
-                !hiddenAlbum &&
-                !isSmallScreen &&
-                settingStore.showSongAlbum
+                type !== 'radio' && !hiddenAlbum && !isSmallScreen && settingStore.showSongAlbum
               "
               class="album"
             >
               专辑
             </n-text>
-            <n-text
-              v-if="type !== 'radio' && settingStore.showSongOperations"
-              class="actions"
-            >
+            <n-text v-if="type !== 'radio' && settingStore.showSongOperations" class="actions">
               操作
             </n-text>
             <n-text v-if="type === 'radio' && !isSmallScreen" class="meta date">更新日期</n-text>
@@ -96,21 +90,35 @@
             :items="virtualListItems"
             :height="`calc(100% - 40px)`"
             :padding-bottom="80"
+            :class="{ 'is-dragging-global': isDragging && draggable }"
             @scroll="onScroll"
           >
             <template #default="{ item, index }">
-              <SongCard
-                v-if="item.type === 'song'"
-                :song="item.data"
-                :index="index"
-                :hiddenCover="hiddenCover || settingStore.hiddenCovers.list"
-                :hiddenAlbum="hiddenAlbum"
-                :hiddenSize="hiddenSize"
-                @click.stop="handleSongClick(item.data)"
-                @dblclick.stop="handleSongPlay(item.data)"
-                @contextmenu.stop="handleShowMenu($event, item.data, index)"
-                @show-menu="handleShowMenu($event, item.data, index)"
-              />
+              <div v-if="item.type === 'song'" class="song-node">
+                <!-- 拖拽放置指示线 -->
+                <div
+                  v-if="isDragging && draggable && dropIndicator.index === index && dropIndicator.position === 'top'"
+                  class="drop-line line-top"
+                />
+                <div
+                  v-if="isDragging && draggable && dropIndicator.index === index && dropIndicator.position === 'bottom'"
+                  class="drop-line line-bottom"
+                />
+                <SongCard
+                  :class="{ 'is-dragging': isDragging && draggable && draggedIndex === index }"
+                  :song="item.data"
+                  :index="index"
+                  :hiddenCover="hiddenCover || settingStore.hiddenCovers.list"
+                  :hiddenAlbum="hiddenAlbum"
+                  :hiddenSize="hiddenSize"
+                  @mousedown="draggable ? handlePointerDown($event, index, item.data.name || '未知曲目') : undefined"
+                  @touchstart="draggable ? handlePointerDown($event, index, item.data.name || '未知曲目') : undefined"
+                  @click.stop="handleSongClick(item.data)"
+                  @dblclick.stop="handleSongPlay(item.data)"
+                  @contextmenu.stop="handleShowMenu($event, item.data, index)"
+                  @show-menu="handleShowMenu($event, item.data, index)"
+                />
+              </div>
               <!-- 加载更多 -->
               <div v-else-if="item.type === 'footer'" class="load-more">
                 <n-flex v-if="loadMore && loading">
@@ -133,16 +141,31 @@
       <!-- 列表操作 -->
       <Teleport to="body">
         <Transition name="fade" mode="out-in">
-          <n-float-button-group v-if="floatToolShow" class="list-menu">
-            <Transition name="fade" mode="out-in">
-              <n-float-button v-if="scrollTop > 100" width="42" @click="scrollToTop">
+          <div v-if="floatToolShow" class="list-menu">
+            <n-float-button-group position="relative">
+              <n-float-button v-if="hasPlaySong >= 0" width="42" @click="scrollToCurrentSong">
+                <SvgIcon :size="22" name="Location" />
+              </n-float-button>
+              <n-float-button :class="{ hidden: scrollTop <= 100 }" width="42" @click="scrollToTop">
                 <SvgIcon :size="22" name="Up" />
               </n-float-button>
-            </Transition>
-            <n-float-button v-if="hasPlaySong >= 0" width="42" @click="scrollToCurrentSong">
-              <SvgIcon :size="22" name="Location" />
-            </n-float-button>
-          </n-float-button-group>
+            </n-float-button-group>
+          </div>
+        </Transition>
+      </Teleport>
+      <!-- 拖拽浮动标签 -->
+      <Teleport to="body">
+        <Transition name="fade">
+          <div
+            v-if="isDragging && draggable && dragLabelData"
+            class="drag-label"
+            :style="{
+              top: `${dragLabelPosition.top}px`,
+              left: `${dragLabelPosition.left}px`,
+            }"
+          >
+            <n-text class="drag-label-name">{{ dragLabelData.name }}</n-text>
+          </div>
         </Transition>
       </Teleport>
     </div>
@@ -162,6 +185,7 @@ import { isEmpty } from "lodash-es";
 import { sortFieldOptions, sortOrderOptions } from "@/utils/meta";
 import { usePlayerController } from "@/core/player/PlayerController";
 import { useMobile } from "@/composables/useMobile";
+import { useDragSort } from "@/composables/List/useDragSort";
 import SongListMenu from "@/components/Menu/SongListMenu.vue";
 import MobileSongMenu from "@/components/Menu/MobileSongMenu.vue";
 import VirtualScroll from "@/components/UI/VirtualScroll.vue";
@@ -200,6 +224,8 @@ const props = withDefaults(
     listVersion?: string | number;
     /** 禁用高度过渡动画 */
     disableHeightTransition?: boolean;
+    /** 是否可拖拽排序 */
+    draggable?: boolean;
   }>(),
   {
     type: "song",
@@ -217,6 +243,8 @@ const emit = defineEmits<{
   scroll: [e: Event];
   // 删除歌曲
   removeSong: [id: number[]];
+  // 拖拽重排序
+  reorder: [fromIndex: number, toIndex: number];
 }>();
 
 const musicStore = useMusicStore();
@@ -224,6 +252,27 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const player = usePlayerController();
 const { isSmallScreen } = useMobile();
+
+// 列表元素
+const listRef = ref<InstanceType<typeof VirtualScroll> | null>(null);
+const songListRef = ref<HTMLElement | null>(null);
+
+// 拖拽排序
+const {
+  isDragging,
+  draggedIndex,
+  dropIndicator,
+  dragLabelData,
+  dragLabelPosition,
+  handlePointerDown,
+} = useDragSort({
+  virtualScrollRef: listRef,
+  itemCount: computed(() => props.data.length),
+  onReorder: (from, to) => emit("reorder", from, to),
+  paddingTop: 0,
+  triggerMode: "longpress",
+  longPressDelay: 300,
+});
 
 // 处理移动端单击播放
 const handleSongClick = (song: SongType) => {
@@ -244,10 +293,6 @@ const handleSongPlay = (song: SongType) => {
 // 列表状态
 const scrollTop = ref<number>(0);
 const scrollIndex = ref<number>(0);
-
-// 列表元素
-const listRef = ref<InstanceType<typeof VirtualScroll> | null>(null);
-const songListRef = ref<HTMLElement | null>(null);
 
 // 悬浮工具
 const floatToolShow = ref<boolean>(true);
@@ -285,11 +330,15 @@ const listData = computed<SongType[]>(() => {
   const order = statusStore.listSortOrder;
   const isAsc = order === "asc";
 
+  // 使用 Intl.Collator 进行排序，支持数字敏感排序 (numeric: true)
+  // 这解决了 1.mp3, 10.mp3, 2.mp3 的问题
+  const collator = new Intl.Collator("zh-CN", { numeric: true });
+
   return data.sort((a, b) => {
     let result = 0;
     switch (field) {
       case "title":
-        result = a.name.localeCompare(b.name, "zh-CN");
+        result = collator.compare(a.name || "", b.name || "");
         break;
       case "artist": {
         const artistA = Array.isArray(a.artists)
@@ -298,17 +347,27 @@ const listData = computed<SongType[]>(() => {
         const artistB = Array.isArray(b.artists)
           ? b.artists[0]?.name || ""
           : (b.artists as string) || "";
-        result = artistA.localeCompare(artistB, "zh-CN");
+        result = collator.compare(artistA, artistB);
         break;
       }
       case "album": {
         const albumA = typeof a.album === "string" ? a.album : a.album?.name || "";
         const albumB = typeof b.album === "string" ? b.album : b.album?.name || "";
-        result = albumA.localeCompare(albumB, "zh-CN");
+        result = collator.compare(albumA, albumB);
+        break;
+      }
+      case "trackNumber":
+        // 增加对 undefined/null 的处理，视为 0
+        result = (a.trackNumber || 0) - (b.trackNumber || 0);
+        break;
+      case "filename": {
+        const fileNameA = a.path?.split(/[\\/]/).pop() || "";
+        const fileNameB = b.path?.split(/[\\/]/).pop() || "";
+        result = collator.compare(fileNameA, fileNameB);
         break;
       }
       case "duration":
-        result = a.duration - b.duration;
+        result = (a.duration || 0) - (b.duration || 0);
         break;
       case "size":
         result = (a.size || 0) - (b.size || 0);
@@ -397,9 +456,16 @@ const scrollToTop = () => {
 
 // 滚动到当前播放歌曲
 const scrollToCurrentSong = () => {
-  if (hasPlaySong.value >= 0) {
-    listRef.value?.scrollToIndex(hasPlaySong.value);
-  }
+  if (hasPlaySong.value < 0) return;
+  // 内部滚动
+  listRef.value?.scrollToIndex(hasPlaySong.value);
+  // 自动高度时回退
+  nextTick(() => {
+    const el = listRef.value?.contentRef?.querySelector<HTMLElement>(
+      `[data-index="${hasPlaySong.value}"]`,
+    );
+    if (el) el.scrollIntoView({ block: "center" });
+  });
 };
 
 // 更新列表播放顺序
@@ -606,11 +672,88 @@ onBeforeUnmount(() => {
   position: fixed;
   right: 40px;
   bottom: 120px;
+  z-index: 10;
+  pointer-events: none;
   .n-float-button {
     height: 42px;
     border: 1px solid rgba(var(--primary), 0.28);
+    pointer-events: auto;
+    transition: opacity 0.3s;
+    &.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
   }
 }
+
+// 拖拽排序
+.song-node {
+  position: relative;
+
+  .drop-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--primary-hex);
+    border-radius: 2px;
+    z-index: 10;
+    pointer-events: none;
+
+    &.line-top {
+      top: 0;
+    }
+    &.line-bottom {
+      bottom: 0;
+    }
+  }
+
+  :deep(.song-card) {
+    transition:
+      opacity 0.2s,
+      transform 0.3s;
+
+    &.is-dragging {
+      opacity: 0.3;
+      transform: scale(0.98);
+      .song-content {
+        border-color: rgba(var(--primary), 0.5);
+      }
+    }
+  }
+}
+
+:deep(.is-dragging-global) {
+  cursor: grabbing;
+
+  * {
+    cursor: grabbing;
+  }
+
+  .song-card {
+    pointer-events: none;
+  }
+}
+
+.drag-label {
+  position: fixed;
+  z-index: 9999;
+  padding: 8px 16px;
+  border-radius: 20px;
+  background-color: rgba(var(--primary), 0.15);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  transform: translate(12px, 12px);
+
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(var(--text-color), 0.3);
+}
+
 .sort-menu {
   display: flex;
   padding: 12px;

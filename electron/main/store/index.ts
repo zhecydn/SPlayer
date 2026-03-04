@@ -1,3 +1,4 @@
+import { DEFAULT_TASKBAR_CONFIG, type TaskbarConfig } from "@shared";
 import { app, screen } from "electron";
 import Store from "electron-store";
 import { join } from "path";
@@ -40,19 +41,9 @@ export interface StoreType {
     config?: LyricConfig;
   };
   /** 任务栏歌词 */
-  taskbar: {
-    /** 是否启用 */
-    enabled: boolean;
-    /** 最大宽度 */
-    maxWidth?: number;
-    /** 显示封面 */
-    showCover?: boolean;
-    /** 位置 */
-    position?: "automatic" | "left" | "right";
-    /** 暂停时显示 */
-    showWhenPaused?: boolean;
-    /** 自动收缩 */
-    autoShrink?: boolean;
+  taskbar: TaskbarConfig & {
+    floatingX?: number;
+    floatingY?: number;
   };
   /** 代理 */
   proxy: string;
@@ -73,6 +64,16 @@ export interface StoreType {
   downloadThreadCount?: number;
   /** 启用HTTP2下载 */
   enableDownloadHttp2?: boolean;
+  /** macOS 专属设置 */
+  macos: {
+    /** 状态栏歌词 */
+    statusBarLyric: {
+      /** 是否启用 */
+      enabled: boolean;
+    };
+  };
+  /** 更新通道 */
+  updateChannel?: "stable" | "nightly";
 }
 
 /**
@@ -97,12 +98,14 @@ export const useStore = () => {
         config: defaultLyricConfig,
       },
       taskbar: {
-        enabled: false,
-        maxWidth: 30,
-        showCover: true,
-        position: "automatic",
-        showWhenPaused: true,
-        autoShrink: false,
+        ...DEFAULT_TASKBAR_CONFIG,
+        floatingX: screenData.workArea.x + screenData.workArea.width / 2 - 150,
+        floatingY: screenData.workArea.y + screenData.workArea.height - 120,
+      },
+      macos: {
+        statusBarLyric: {
+          enabled: false,
+        },
       },
       proxy: "",
       amllDbServer: defaultAMLLDbServer,
@@ -115,6 +118,7 @@ export const useStore = () => {
       },
       downloadThreadCount: 8,
       enableDownloadHttp2: true,
+      updateChannel: "stable",
     },
   });
 };

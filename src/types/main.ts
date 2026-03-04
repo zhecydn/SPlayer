@@ -98,12 +98,8 @@ export type SongType = {
   pc?: boolean;
   /** 大小 */
   size?: number;
-  /** 是否为自定义下载 */
-  isCustom?: boolean;
-  /** 自定义下载链接 */
-  customUrl?: string;
-  /** 自定义Referer */
-  customReferer?: string;
+  /** 曲目序号 */
+  trackNumber?: number;
   /** 音质 */
   quality?: QualityType;
   /** 创建时间 */
@@ -312,6 +308,8 @@ export type SortField =
   | "title"
   | "artist"
   | "album"
+  | "trackNumber"
+  | "filename"
   | "duration"
   | "size"
   | "createTime"

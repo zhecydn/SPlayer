@@ -168,7 +168,7 @@ const player = usePlayerController();
 
 // 当前歌词模式
 const lyricMode = computed(() => {
-  if (settingStore.showYrc) {
+  if (settingStore.showWordLyrics) {
     if (statusStore.usingTTMLLyric) return "TTML";
     if (musicStore.isHasYrc) {
       // 如果是从QQ音乐获取的歌词，显示QRC
@@ -263,6 +263,7 @@ const jumpPage = debounce(
   max-width: 50vh;
   margin-top: 24px;
   padding: 0 2px;
+  // mix-blend-mode: plus-lighter;
   .n-icon {
     color: rgb(var(--main-cover-color));
   }
@@ -385,7 +386,7 @@ const jumpPage = debounce(
   }
   &.center {
     align-items: center;
-    padding: 0 2px;
+    padding: 0 40px;
     .name {
       text-align: center;
     }

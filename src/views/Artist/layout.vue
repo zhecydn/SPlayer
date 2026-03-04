@@ -154,7 +154,7 @@
 <script setup lang="ts">
 import type { DropdownOption } from "naive-ui";
 import type { ArtistType } from "@/types/main";
-import { coverLoaded, renderIcon, copyData } from "@/utils/helper";
+import { coverLoaded, renderIcon, copyData, getShareUrl } from "@/utils/helper";
 import { renderToolbar } from "@/utils/meta";
 import { openDescModal, openBatchList } from "@/utils/modal";
 import { artistDetail } from "@/api/artist";
@@ -208,8 +208,7 @@ const moreOptions = computed<DropdownOption[]>(() => [
     label: "复制分享链接",
     key: "copy",
     props: {
-      onClick: () =>
-        copyData(`https://music.163.com/#/artist?id=${artistId.value}`, "已复制分享链接到剪贴板"),
+      onClick: () => copyData(getShareUrl("artist", artistId.value), "已复制分享链接到剪贴板"),
     },
     icon: renderIcon("Share"),
   },

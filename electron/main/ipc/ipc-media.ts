@@ -77,6 +77,26 @@ const initMediaIpc = () => {
     }
   });
 
+  // 播放速率更新
+  ipcMain.on("media-update-playback-rate", (_, payload: { rate: number }) => {
+    if (!emi) return;
+    try {
+      emi.updatePlaybackRate(payload.rate);
+    } catch (e) {
+      processLog.error("[Media] 更新播放速率失败", e);
+    }
+  });
+
+  // 音量更新
+  ipcMain.on("media-update-volume", (_, payload: { volume: number }) => {
+    if (!emi) return;
+    try {
+      emi.updateVolume(payload.volume);
+    } catch (e) {
+      processLog.error("[Media] 更新音量失败", e);
+    }
+  });
+
   // 进度更新
   ipcMain.on("media-update-timeline", (_, payload: TimelinePayload) => {
     if (!emi) return;

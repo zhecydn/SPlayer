@@ -48,7 +48,7 @@
           >
             <SvgIcon :name="lyricConfig.isLock ? 'LockOpen' : 'Lock'" />
           </div>
-          <div class="menu-btn" @click.stop="sendToMain('close-desktop-lyric')">
+          <div class="menu-btn" @click.stop="sendToMain('desktop-lyric:close')">
             <SvgIcon name="Close" />
           </div>
         </n-flex>
@@ -103,7 +103,11 @@
         >
           <!-- 逐字歌词渲染 -->
           <template
-            v-if="lyricConfig.showYrc && lyricData?.yrcData?.length && line.line?.words?.length > 1"
+            v-if="
+              lyricConfig.showWordLyrics &&
+              lyricData?.yrcData?.length &&
+              line.line?.words?.length > 1
+            "
           >
             <span
               class="scroll-content"
@@ -157,8 +161,8 @@
 </template>
 
 <script setup lang="ts">
-import { LyricLine, LyricWord } from "@applemusic-like-lyrics/lyric";
-import { calculateLyricIndex } from "@/utils/calc";
+import { LyricWord } from "@applemusic-like-lyrics/lyric";
+import { calculateLyricIndex, getSafeEndTime } from "@/utils/calc";
 import { LyricConfig, LyricData, RenderLine } from "@/types/desktop-lyric";
 import defaultDesktopLyricConfig from "@/assets/data/lyricConfig";
 
@@ -200,7 +204,9 @@ const LYRIC_LOOKAHEAD = 300;
 // 实时歌词索引
 const currentLyricIndex = computed(() => {
   const lyrics =
-    lyricConfig.showYrc && lyricData?.yrcData?.length ? lyricData.yrcData : lyricData.lrcData;
+    lyricConfig.showWordLyrics && lyricData?.yrcData?.length
+      ? lyricData.yrcData
+      : lyricData.lrcData;
   // 边界检查
   if (!lyrics || !lyrics.length) return -1;
   return calculateLyricIndex(playSeekMs.value, lyrics, 0, 2);
@@ -239,26 +245,6 @@ const handleMouseMove = () => {
  */
 const handleMouseLeave = () => {
   isHovered.value = false;
-};
-
-/**
- * 计算安全的结束时间
- * - 优先使用当前行的 `endTime`
- * - 若为空则使用下一行的 `time` 作为当前行的结束参照
- * @param lyrics 歌词数组
- * @param idx 当前行索引
- * @returns 安全的结束时间（秒）
- */
-const getSafeEndTime = (lyrics: LyricLine[], idx: number) => {
-  const cur = lyrics?.[idx];
-  const next = lyrics?.[idx + 1];
-  const curEnd = Number(cur?.endTime);
-  const curStart = Number(cur?.startTime);
-  if (Number.isFinite(curEnd) && curEnd > curStart) return curEnd;
-  const nextStart = Number(next?.startTime);
-  if (Number.isFinite(nextStart) && nextStart > curStart) return nextStart;
-  // 无有效结束参照：返回 0（表示无时长，不滚动）
-  return 0;
 };
 
 /**
@@ -312,7 +298,9 @@ const renderLyricLines = computed<RenderLine[]>(() => {
   }
 
   const lyrics =
-    lyricConfig.showYrc && lyricData?.yrcData?.length ? lyricData.yrcData : lyricData.lrcData;
+    lyricConfig.showWordLyrics && lyricData?.yrcData?.length
+      ? lyricData.yrcData
+      : lyricData.lrcData;
   // 无歌曲名且无歌词
   if (!lyricData.playName && !lyrics?.length) {
     return placeholder("SPlayer Desktop Lyric");
@@ -487,9 +475,9 @@ const cachedBounds = reactive({
 const updateCachedBounds = async () => {
   try {
     const [winBounds, stored, screenBounds] = await Promise.all([
-      window.electron.ipcRenderer.invoke("get-window-bounds"),
+      window.electron.ipcRenderer.invoke("desktop-lyric:get-bounds"),
       window.api.store.get("lyric"),
-      window.electron.ipcRenderer.invoke("get-virtual-screen-bounds"),
+      window.electron.ipcRenderer.invoke("desktop-lyric:get-virtual-screen-bounds"),
     ]);
     cachedBounds.x = winBounds?.x ?? 0;
     cachedBounds.y = winBounds?.y ?? 0;
@@ -550,7 +538,7 @@ const onDocPointerDown = (event: PointerEvent) => {
     dragState.maxY = cachedBounds.screenMaxY;
   }
   // 固定最大尺寸以规避 DPI 缩放 bug
-  window.electron.ipcRenderer.send("toggle-fixed-max-size", {
+  sendToMain("desktop-lyric:toggle-fixed-size", {
     width: safeWidth,
     height: safeHeight,
     fixed: true,
@@ -577,13 +565,7 @@ const onDocPointerMove = useThrottleFn((event: PointerEvent) => {
       Math.max(dragState.minY, Math.min(dragState.maxY - dragState.winHeight, newWinY)),
     );
   }
-  window.electron.ipcRenderer.send(
-    "move-window",
-    newWinX,
-    newWinY,
-    dragState.winWidth,
-    dragState.winHeight,
-  );
+  sendToMain("desktop-lyric:move", newWinX, newWinY, dragState.winWidth, dragState.winHeight);
 }, 16);
 
 /**
@@ -599,12 +581,12 @@ const onDocPointerUp = () => {
   document.removeEventListener("pointerup", onDocPointerUp);
   requestAnimationFrame(() => {
     // 恢复拖拽前宽高
-    window.electron.ipcRenderer.send("update-lyric-size", dragState.winWidth, dragState.winHeight);
+    sendToMain("desktop-lyric:resize", dragState.winWidth, dragState.winHeight);
     // 根据字体大小恢复一次高度
     const height = fontSizeToHeight(lyricConfig.fontSize);
     if (height) pushWindowHeight(height);
     // 恢复最大宽高
-    window.electron.ipcRenderer.send("toggle-fixed-max-size", {
+    sendToMain("desktop-lyric:toggle-fixed-size", {
       width: dragState.winWidth,
       height: dragState.winHeight,
       fixed: false,
@@ -644,7 +626,7 @@ const computedFontSize = computed(() => {
 
 // 保存配置
 const debouncedSaveConfig = useDebounceFn((size: number) => {
-  window.electron.ipcRenderer.send("update-desktop-lyric-option", { fontSize: size }, true);
+  sendToMain("desktop-lyric:set-option", { fontSize: size }, true);
 }, 500);
 
 // 监听字体大小变化
@@ -680,7 +662,7 @@ const fontSizeToHeight = (size: number) => {
 const pushWindowHeight = (nextHeight: number) => {
   if (!Number.isFinite(nextHeight)) return;
   if (dragState.isDragging) return;
-  window.electron.ipcRenderer.send("update-window-height", nextHeight);
+  sendToMain("desktop-lyric:set-height", nextHeight);
 };
 
 // 监听配置中的字体大小变化，同步更新窗口高度
@@ -708,7 +690,7 @@ const sendToMainWin = (eventName: string, ...args: any[]) => {
 
 // 切换桌面歌词锁定状态
 const toggleLyricLock = () => {
-  sendToMain("toggle-desktop-lyric-lock", !lyricConfig.isLock);
+  sendToMain("desktop-lyric:toggle-lock", { lock: !lyricConfig.isLock });
   lyricConfig.isLock = !lyricConfig.isLock;
 };
 
@@ -719,13 +701,13 @@ const toggleLyricLock = () => {
 const tempToggleLyricLock = (isLock: boolean) => {
   // 是否已经解锁
   if (!lyricConfig.isLock) return;
-  window.electron.ipcRenderer.send("toggle-desktop-lyric-lock", isLock, true);
+  sendToMain("desktop-lyric:toggle-lock", { lock: isLock, temp: true });
 };
 
 onMounted(() => {
   // 接收歌词数据
   window.electron.ipcRenderer.on(
-    "update-desktop-lyric-data",
+    "desktop-lyric:update-data",
     (_event, data: LyricData & { sendTimestamp?: number }) => {
       Object.assign(lyricData, data);
       // 首次接收到歌词数据时，立即结束初始化状态
@@ -766,17 +748,17 @@ onMounted(() => {
       }
     },
   );
-  window.electron.ipcRenderer.on("update-desktop-lyric-option", (_event, config: LyricConfig) => {
+  window.electron.ipcRenderer.on("desktop-lyric:update-option", (_event, config: LyricConfig) => {
     Object.assign(lyricConfig, config);
     // 根据文字大小改变一次高度
     const height = fontSizeToHeight(config.fontSize);
     if (height) pushWindowHeight(height);
     // 是否锁定
-    sendToMain("toggle-desktop-lyric-lock", config.isLock);
+    sendToMain("desktop-lyric:toggle-lock", { lock: config.isLock });
   });
   // 请求歌词数据及配置
-  window.electron.ipcRenderer.send("request-desktop-lyric-data");
-  window.electron.ipcRenderer.invoke("request-desktop-lyric-option");
+  sendToMain("desktop-lyric:request-data");
+  window.electron.ipcRenderer.invoke("desktop-lyric:get-option");
 
   // 初始化缓存边界数据
   updateCachedBounds();

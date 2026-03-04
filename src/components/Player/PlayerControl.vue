@@ -39,18 +39,24 @@
           >
             <SvgIcon name="Download" />
           </div>
-          <!-- 显示评论 -->
-          <div
-            v-if="
-              !musicStore.playSong.path &&
-              !statusStore.pureLyricMode &&
-              settingStore.fullscreenPlayerElements.comments
+          <n-badge
+            :value="formatCommentCount(statusStore.songCommentCount)"
+            :show="
+              statusStore.songCommentCount > 0 && settingStore.fullscreenPlayerElements.commentCount
             "
-            class="menu-icon"
-            @click.stop="statusStore.showPlayerComment = !statusStore.showPlayerComment"
           >
-            <SvgIcon :depth="statusStore.showPlayerComment ? 1 : 3" name="Message" />
-          </div>
+            <div
+              v-if="
+                !musicStore.playSong.path &&
+                !statusStore.pureLyricMode &&
+                settingStore.fullscreenPlayerElements.comments
+              "
+              class="menu-icon"
+              @click.stop="statusStore.showPlayerComment = !statusStore.showPlayerComment"
+            >
+              <SvgIcon :depth="statusStore.showPlayerComment ? 1 : 3" name="Message" />
+            </div>
+          </n-badge>
         </n-flex>
         <div class="center">
           <div class="btn">
@@ -68,7 +74,12 @@
             <div
               v-if="statusStore.personalFmMode"
               class="btn-icon"
-              v-debounce="() => songManager.personalFMTrash(musicStore.personalFMSong?.id)"
+              v-debounce="
+                () =>
+                  songManager.personalFMTrash(musicStore.personalFMSong?.id, () =>
+                    player.nextOrPrev('next'),
+                  )
+              "
             >
               <SvgIcon class="icon" :size="18" name="ThumbDown" />
             </div>
@@ -114,10 +125,20 @@
             </template>
           </div>
           <!-- 进度条 -->
-          <div class="slider">
+          <div
+            :class="['slider', { 'automix-active': showAutomixFx }]"
+            @animationend="onFxAnimationEnd"
+          >
             <span @click="toggleTimeFormat">{{ timeDisplay[0] }}</span>
             <PlayerSlider :show-tooltip="false" />
-            <span @click="toggleTimeFormat">{{ timeDisplay[1] }}</span>
+            <div class="time-container">
+              <Transition name="fade" mode="out-in">
+                <span v-if="!showAutomixLabel" key="time" @click="toggleTimeFormat">{{
+                  timeDisplay[1]
+                }}</span>
+                <span v-else key="automix" class="automix-label">混音</span>
+              </Transition>
+            </div>
           </div>
         </div>
         <n-flex class="right" align="center" justify="end">
@@ -136,6 +157,8 @@ import { useDataStore, useMusicStore, useStatusStore, useSettingStore } from "@/
 import { toLikeSong } from "@/utils/auth";
 import { useTimeFormat } from "@/composables/useTimeFormat";
 import { openDownloadSong, openPlaylistAdd } from "@/utils/modal";
+import { getComment } from "@/api/comment";
+import { formatCommentCount } from "@/utils/format";
 
 const dataStore = useDataStore();
 const musicStore = useMusicStore();
@@ -146,6 +169,115 @@ const songManager = useSongManager();
 const player = usePlayerController();
 
 const { timeDisplay, toggleTimeFormat } = useTimeFormat();
+
+// 获取评论数量
+const fetchCommentCount = async () => {
+  if (!settingStore.fullscreenPlayerElements.commentCount) return;
+  const id = musicStore.playSong.id;
+  if (!id || typeof id !== "number" || musicStore.playSong.path) return;
+  try {
+    const type = musicStore.playSong.type === "radio" ? 4 : 0;
+    const result = await getComment(id, type as 0 | 4, 1, 1);
+    if (result.data?.totalCount != null) {
+      statusStore.songCommentCount = result.data.totalCount;
+    }
+  } catch {
+    // 忽略错误
+  }
+};
+
+// 歌曲变化时获取评论数量
+watch(
+  () => musicStore.playSong.id,
+  () => {
+    statusStore.songCommentCount = 0;
+    fetchCommentCount();
+  },
+);
+
+watch(
+  () => settingStore.fullscreenPlayerElements.commentCount,
+  (val) => {
+    if (val && statusStore.songCommentCount === 0) {
+      fetchCommentCount();
+    }
+  },
+);
+
+onMounted(() => {
+  if (musicStore.playSong.id && !musicStore.playSong.path) {
+    fetchCommentCount();
+  }
+});
+
+const showAutomixFx = ref(false);
+let automixFxTimer: number | null = null;
+const showAutomixLabel = ref(false);
+
+const triggerAutomixFx = async () => {
+  if (automixFxTimer !== null) {
+    window.clearTimeout(automixFxTimer);
+    automixFxTimer = null;
+  }
+  showAutomixFx.value = false;
+  await nextTick();
+  showAutomixFx.value = true;
+  showAutomixLabel.value = true;
+  // 移除辉光自动关闭逻辑，现在跟随 showAutomixLabel
+};
+
+watch(
+  () => statusStore.automixFxSeq,
+  (seq, prev) => {
+    if (!seq || seq === prev) return;
+    void triggerAutomixFx();
+  },
+);
+
+watch(
+  () => statusStore.automixEndedSeq,
+  (seq, prev) => {
+    if (!seq || seq === prev) return;
+    if (showAutomixLabel.value) {
+      if (automixFxTimer !== null) {
+        window.clearTimeout(automixFxTimer);
+      }
+      automixFxTimer = window.setTimeout(() => {
+        showAutomixLabel.value = false;
+        showAutomixFx.value = false;
+        automixFxTimer = null;
+      }, 2000); // 混音结束后保留 2 秒再淡出
+    }
+  },
+);
+
+// 监听歌曲变化，延迟关闭混音显示和辉光
+watch(
+  () => musicStore.playSong?.id,
+  (_newId, _oldId) => {
+    if (showAutomixLabel.value) {
+      if (automixFxTimer !== null) {
+        window.clearTimeout(automixFxTimer);
+      }
+      automixFxTimer = window.setTimeout(() => {
+        showAutomixLabel.value = false;
+        showAutomixFx.value = false;
+        automixFxTimer = null;
+      }, 2000); // 切歌后保留 2 秒再淡出
+    }
+  },
+);
+
+const onFxAnimationEnd = () => {
+  // 移除之前的单次动画结束逻辑，因为现在是 infinite 循环，直到 showAutomixFx 为 false
+};
+
+onBeforeUnmount(() => {
+  if (automixFxTimer !== null) {
+    window.clearTimeout(automixFxTimer);
+    automixFxTimer = null;
+  }
+});
 </script>
 
 <style lang="scss" scoped>
@@ -188,6 +320,12 @@ const { timeDisplay, toggleTimeFormat } = useTimeFormat();
       }
       &:active {
         transform: scale(1);
+      }
+    }
+    :deep(.n-badge-sup) {
+      background-color: rgba(var(--main-cover-color), 0.14);
+      .n-base-slot-machine {
+        color: rgb(var(--main-cover-color));
       }
     }
     :deep(.right-menu) {
@@ -272,14 +410,63 @@ const { timeDisplay, toggleTimeFormat } = useTimeFormat();
       width: 100%;
       max-width: 480px;
       font-size: 12px;
+      position: relative;
       .n-slider {
         margin: 6px 8px;
         --n-handle-size: 12px;
         --n-rail-height: 4px;
       }
-      span {
-        opacity: 0.6;
-        cursor: pointer;
+      .time-container {
+        position: relative;
+        min-width: 40px;
+        height: 100%;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+
+        span {
+          position: absolute;
+          right: 0;
+          white-space: nowrap;
+          opacity: 0.6;
+          cursor: pointer;
+        }
+
+        .automix-label {
+          opacity: 1;
+          font-weight: 600;
+          color: rgba(var(--main-cover-color), 0.95);
+          text-shadow: 0 0 10px rgba(var(--main-cover-color), 0.55);
+          animation: text-pulse 2s infinite ease-in-out;
+        }
+      }
+    }
+    .slider.automix-active {
+      :deep(.n-slider-rail) {
+        position: relative;
+        overflow: hidden;
+      }
+      :deep(.n-slider-rail)::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 999px;
+        background: linear-gradient(
+          90deg,
+          rgba(var(--main-cover-color), 0) 0%,
+          rgba(var(--main-cover-color), 0.2) 20%,
+          rgba(var(--main-cover-color), 0.6) 50%,
+          rgba(var(--main-cover-color), 0.2) 80%,
+          rgba(var(--main-cover-color), 0) 100%
+        );
+        box-shadow: 0 0 15px rgba(var(--main-cover-color), 0.5);
+        opacity: 0.8;
+        transform: translateX(-100%);
+        animation: automix-scan 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        pointer-events: none;
       }
     }
   }
@@ -288,6 +475,68 @@ const { timeDisplay, toggleTimeFormat } = useTimeFormat();
     .right {
       opacity: 1;
     }
+  }
+}
+
+@keyframes automix-rail {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  14% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+  100% {
+    opacity: 0;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes automix-text {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  22% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+  100% {
+    opacity: 0;
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes automix-scan {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes text-pulse {
+  0%,
+  100% {
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
   }
 }
 </style>

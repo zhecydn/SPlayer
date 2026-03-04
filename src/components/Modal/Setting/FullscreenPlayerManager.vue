@@ -42,6 +42,7 @@ const items: Item[] = [
   { label: "显示复制歌词", key: "copyLyric" },
   { label: "显示歌词调整", key: "lyricOffset" },
   { label: "显示歌词设置", key: "lyricSettings" },
+  { label: "显示评论数量", key: "commentCount" },
 ];
 
 const updateSetting = (key: FullscreenPlayerElementKey, val: boolean) => {

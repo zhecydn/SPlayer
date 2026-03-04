@@ -136,6 +136,8 @@ export declare function shutdown(): void
 export interface SystemMediaEvent {
   type: SystemMediaEventType
   positionMs?: number
+  rate?: number
+  volume?: number
 }
 
 export type SystemMediaEventType =  'Play'|
@@ -145,6 +147,8 @@ export type SystemMediaEventType =  'Play'|
 'PreviousSong'|
 'ToggleShuffle'|
 'ToggleRepeat'|
+'SetRate'|
+'SetVolume'|
 /** 绝对位置，毫秒 */
 'Seek';
 
@@ -153,6 +157,8 @@ export interface TimelinePayload {
   currentTime: number
   /** 单位是毫秒 */
   totalTime: number
+  /** 是否为 seek 操作触发的更新 */
+  seeked?: boolean
 }
 
 /**
@@ -175,6 +181,15 @@ export declare function updateDiscordConfig(payload: DiscordConfigPayload): void
  * 更新 Discord RPC 的元数据时，必须提供 `original_cover_url`
  */
 export declare function updateMetadata(payload: MetadataParam): void
+
+/**
+ * 更新播放速率
+ *
+ * ### 备注
+ *
+ * 只会更新媒体控件的信息，不会更新 Discord RPC 上的信息
+ */
+export declare function updatePlaybackRate(rate: number): void
 
 /**
  * 更新播放模式
@@ -202,3 +217,12 @@ export declare function updatePlayState(payload: PlayStatePayload): void
  * Discord RPC 实现的进度更新有节流，调用此函数无需担心 Discord RPC 的速率限制
  */
 export declare function updateTimeline(payload: TimelinePayload): void
+
+/**
+ * 更新音量
+ *
+ * ### 备注
+ *
+ * 只会更新媒体控件的信息，不会更新 Discord RPC 上的信息
+ */
+export declare function updateVolume(volume: number): void

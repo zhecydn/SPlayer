@@ -6,8 +6,10 @@
         :style="{
           cursor: statusStore.playerMetaShow || isShowComment ? 'auto' : 'none',
         }"
-        :class="['full-player', { 'show-comment': isShowComment }]"
+        :class="['full-player', { 'show-comment': isShowComment && !statusStore.pureLyricMode }]"
         @mouseleave="playerLeave"
+        @mousemove="playerMove"
+        @click="playerMove"
       >
         <!-- 背景 -->
         <PlayerBackground />
@@ -29,7 +31,7 @@
           <!-- 菜单 -->
           <PlayerMenu @mouseenter.stop="stopHide" @mouseleave.stop="playerMove" />
           <!-- 全屏封面 -->
-          <PlayerCover v-if="settingStore.playerType === 'fullscreen' && !pureLyricMode" />
+          <PlayerCover v-if="showFullScreenCover" />
           <!-- 主内容 -->
           <Transition name="zoom" mode="out-in">
             <div
@@ -114,13 +116,16 @@ const isShowComment = computed<boolean>(
 /** 没有歌词 */
 const noLrc = computed<boolean>(() => {
   const noNormalLrc = !musicStore.isHasLrc;
-  const noYrcAvailable = !musicStore.isHasYrc || !settingStore.showYrc;
+  const noYrcAvailable = !musicStore.isHasYrc || !settingStore.showWordLyrics;
   return noNormalLrc && noYrcAvailable;
 });
 
 /** 是否处于纯净模式 */
-const pureLyricMode = computed<boolean>(
-  () => (statusStore.pureLyricMode && musicStore.isHasLrc) || musicStore.playSong.type === "radio",
+const pureLyricMode = computed<boolean>(() => statusStore.pureLyricMode && musicStore.isHasLrc);
+
+/* 是否显示全屏封面 */
+const showFullScreenCover = computed<boolean>(
+  () => settingStore.playerType === "fullscreen" && !pureLyricMode.value && !isShowComment.value,
 );
 
 // 主内容 key
@@ -152,7 +157,7 @@ const playerDataCenter = computed<boolean>(
 
 // 当前实时歌词
 const instantLyrics = computed(() => {
-  const isYrc = musicStore.songLyric.yrcData?.length && settingStore.showYrc;
+  const isYrc = musicStore.songLyric.yrcData?.length && settingStore.showWordLyrics;
   const content = isYrc
     ? musicStore.songLyric.yrcData[statusStore.lyricIndex]
     : musicStore.songLyric.lrcData[statusStore.lyricIndex];
@@ -262,7 +267,6 @@ onBeforeUnmount(() => {
     align-items: center;
     width: 100%;
     height: calc(100vh - 160px);
-    z-index: 0;
     transition:
       opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
       transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -287,6 +291,7 @@ onBeforeUnmount(() => {
       height: 100%;
       display: flex;
       flex-direction: column;
+      mix-blend-mode: v-bind("settingStore.lyricsBlendMode");
       transition:
         width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
         opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);

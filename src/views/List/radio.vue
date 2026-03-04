@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import type { DropdownOption, MessageReactive } from "naive-ui";
 import { formatCoverList, formatSongsList } from "@/utils/format";
-import { renderIcon, copyData } from "@/utils/helper";
+import { renderIcon, copyData, getShareUrl } from "@/utils/helper";
 import { useDataStore } from "@/stores";
 import { radioAllProgram, radioDetail } from "@/api/radio";
 import { useListDetail } from "@/composables/List/useListDetail";
@@ -169,8 +169,7 @@ const moreOptions = computed<DropdownOption[]>(() => [
     label: "复制分享链接",
     key: "copy",
     props: {
-      onClick: () =>
-        copyData(`https://music.163.com/#/djradio?id=${radioId.value}`, "已复制分享链接到剪贴板"),
+      onClick: () => copyData(getShareUrl("djradio", radioId.value), "已复制分享链接到剪贴板"),
     },
     icon: renderIcon("Share"),
   },

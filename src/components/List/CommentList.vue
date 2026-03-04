@@ -2,12 +2,12 @@
   <Transition name="fade" mode="out-in">
     <n-flex v-if="data.length > 0" :size="20" :class="['comment-list', { transparent }]" vertical>
       <n-flex
-      v-for="(item, index) in data"
-      :key="index"
-      :size="0"
-      class="comments"
-      @dblclick="handleDoubleClick(item)"
-    >
+        v-for="(item, index) in data"
+        :key="index"
+        :size="0"
+        class="comments"
+        @dblclick="handleDoubleClick(item)"
+      >
         <div v-if="!transparent && !hiddenCover" class="user">
           <div class="avatar">
             <n-image
@@ -115,7 +115,7 @@ const props = defineProps<{
   // 透明
   transparent?: boolean;
   // 资源 ID
-  resId: number;
+  resId: number | string;
   hiddenCover?: boolean;
 }>();
 
@@ -169,10 +169,11 @@ const handleDoubleClick = debounce(async (item: CommentType) => {
     openUserLogin();
     return;
   }
+  // 本地歌曲不支持抱一抱
+  if (typeof props.resId !== "number") return;
   try {
     const result = await hugComment(userStore.userData.userId, item.id, props.resId);
     if (result.code === 200) {
-      // 获取抱一抱列表以得到总数
       // 获取抱一抱列表以得到总数
       try {
         const listResult = await getCommentHugList(
@@ -287,7 +288,7 @@ const handleDoubleClick = debounce(async (item: CommentType) => {
         border-radius: 8px;
         font-size: 13px;
         margin-top: 6px;
-        background-color: rgba(var(--primary), 0.12);
+        background-color: rgba(var(--main-cover-color), 0.12);
         .text {
           white-space: pre-wrap;
           user-select: text;

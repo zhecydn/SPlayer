@@ -146,7 +146,12 @@
       <div
         v-if="statusStore.personalFmMode"
         class="play-icon"
-        v-debounce="() => songManager.personalFMTrash(musicStore.personalFMSong?.id)"
+        v-debounce="
+          () =>
+            songManager.personalFMTrash(musicStore.personalFMSong?.id, () =>
+              player.nextOrPrev('next'),
+            )
+        "
       >
         <SvgIcon class="icon" :size="18" name="ThumbDown" />
       </div>
@@ -241,10 +246,11 @@ import { useDataStore, useMusicStore, useSettingStore, useStatusStore } from "@/
 import { toLikeSong } from "@/utils/auth";
 import { useTimeFormat } from "@/composables/useTimeFormat";
 import { useSwipe } from "@vueuse/core";
-import { copyData, coverLoaded, renderIcon } from "@/utils/helper";
+import { copyData, coverLoaded, renderIcon, getShareUrl } from "@/utils/helper";
 import {
   openAutoClose,
   openChangeRate,
+  openCopySongInfo,
   openDownloadSong,
   openJumpArtist,
   openPlaylistAdd,
@@ -311,15 +317,20 @@ const songMoreOptions = computed<DropdownOption[]>(() => {
           icon: renderIcon("Copy", { size: 18 }),
         },
         {
+          key: "copy-song-info",
+          label: "复制更多信息",
+          show: !isLocal && isSong,
+          props: {
+            onClick: () => openCopySongInfo(song.id),
+          },
+          icon: renderIcon("FormatList", { size: 18 }),
+        },
+        {
           key: "share",
           label: `分享${song.type === "song" ? "歌曲" : "节目"}链接`,
           show: !isLocal,
           props: {
-            onClick: () =>
-              copyData(
-                `https://music.163.com/#/${song.type}?id=${song.id}`,
-                "已复制分享链接到剪切板",
-              ),
+            onClick: () => copyData(getShareUrl(song.type, song.id), "已复制分享链接到剪切板"),
           },
           icon: renderIcon("Share", { size: 18 }),
         },
@@ -404,7 +415,7 @@ const isShowLyrics = computed(() => {
 
 // 当前实时歌词
 const instantLyrics = computed(() => {
-  const isYrc = musicStore.songLyric.yrcData?.length && settingStore.showYrc;
+  const isYrc = musicStore.songLyric.yrcData?.length && settingStore.showWordLyrics;
   const content = isYrc
     ? musicStore.songLyric.yrcData[statusStore.lyricIndex]
     : musicStore.songLyric.lrcData[statusStore.lyricIndex];
